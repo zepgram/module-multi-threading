@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+  <type name="Magento\Framework\Console\CommandListInterface">
+    <arguments>
+      <argument name="commands" xsi:type="array">
+        <item name="zepgram_multi_threading_console_command_thread_processor_command" xsi:type="object">Zepgram\MultiThreading\Console\Command\ThreadProcessorCommand</item>
+      </argument>
+    </arguments>
+  </type>
+</config>
