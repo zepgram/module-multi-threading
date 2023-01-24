@@ -1,10 +1,31 @@
 <?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
-  <type name="Magento\Framework\Console\CommandListInterface">
-    <arguments>
-      <argument name="commands" xsi:type="array">
-        <item name="zepgram_multi_threading_console_command_thread_processor_command" xsi:type="object">Zepgram\MultiThreading\Console\Command\ThreadProcessorCommand</item>
-      </argument>
-    </arguments>
-  </type>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <type name="Magento\Framework\Console\CommandListInterface">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="zepgram_multi_threading_console_command_thread_processor_command" xsi:type="object">
+                    Zepgram\MultiThreading\Console\Command\ThreadProcessorCommand
+                </item>
+            </argument>
+        </arguments>
+    </type>
+    <virtualType name="Zepgram\MultiThreading\Logger\Handler" type="Magento\Framework\Logger\Handler\Base">
+        <arguments>
+            <argument name="filesystem" xsi:type="object">Magento\Framework\Filesystem\Driver\File</argument>
+            <argument name="fileName" xsi:type="string">var/log/zepgram/multi_threading.log</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="Zepgram\MultiThreading\Logger\Logger" type="Magento\Framework\Logger\Monolog">
+        <arguments>
+            <argument name="handlers" xsi:type="array">
+                <item name="system" xsi:type="object">Zepgram\MultiThreading\Logger\Handler</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <type name="Zepgram\MultiThreading\Model\Processor\ForkedProcessor">
+        <arguments>
+            <argument name="logger" xsi:type="object">Zepgram\MultiThreading\Logger\Logger</argument>
+        </arguments>
+    </type>
 </config>

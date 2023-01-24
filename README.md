@@ -141,10 +141,10 @@ bin/magento thread:processor <command_name> [--timeout=<timeout>] [--iterations=
 - `progress`: Show progress bar while executing command
 
 ### How it works
-The `thread:processor` command creates a new child process using the `pcntl_fork()` function,
-which is a system call that creates a child process, allowing the parent process to continue
-executing. The child process runs the command specified by the user, while the parent process
-monitors the child process and can act accordingly.
+The `thread:processor` command creates a dedicated child process to execute existing command line.
+The child process runs the command specified by the user, while the parent process
+monitors the child process and can act accordingly. You can define iterations and execute the same command
+multiple times with a dedicated child foreach execution.
 
 The `ForkedSearchResultProcessor`,`ForkedCollectionProcessor` and `ForkedArrayProcessor` classes
 use a similar approach to process a search criteria or a collection. The process is divided
