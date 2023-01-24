@@ -21,6 +21,8 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function setCurrentPage(int $currentPage): void
     {
+        $this->collection->clear();
+        $this->collection->setPageSize($this->getPageSize());
         $this->collection->setCurPage($currentPage);
     }
 
@@ -29,7 +31,7 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getPageSize(): int
     {
-        return (int) $this->collection->getPageSize();
+        return (int)$this->collection->getPageSize();
     }
 
     /**
@@ -37,7 +39,7 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getTotalPages(): int
     {
-        return (int) ceil($this->collection->getSize() / $this->getPageSize());
+        return (int)ceil($this->collection->getSize() / $this->getPageSize());
     }
 
     /**

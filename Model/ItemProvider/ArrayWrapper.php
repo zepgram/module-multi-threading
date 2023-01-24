@@ -13,13 +13,12 @@ class ArrayWrapper implements ItemProviderInterface
     private $pageSize;
 
     /** @var int */
-    private $currentPage;
+    private $currentPage = 1;
 
     public function __construct(array $items, int $pageSize)
     {
         $this->items = $items;
         $this->pageSize = $pageSize;
-        $this->currentPage = 1;
     }
 
     /**
@@ -43,7 +42,7 @@ class ArrayWrapper implements ItemProviderInterface
      */
     public function getTotalPages(): int
     {
-        return (int) ceil(count($this->items) / $this->pageSize);
+        return (int)ceil(count($this->items) / $this->pageSize);
     }
 
     /**
