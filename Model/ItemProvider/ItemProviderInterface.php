@@ -15,6 +15,11 @@ interface ItemProviderInterface
     /**
      * @return int
      */
+    public function getSize(): int;
+
+    /**
+     * @return int
+     */
     public function getPageSize(): int;
 
     /**

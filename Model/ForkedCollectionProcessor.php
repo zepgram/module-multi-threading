@@ -17,6 +17,10 @@ class ForkedCollectionProcessor
     /** @var CollectionWrapperFactory */
     private $collectionWrapperFactory;
 
+    /**
+     * @param ForkedProcessorRunner $forkedProcessorRunner
+     * @param CollectionWrapperFactory $collectionWrapperFactory
+     */
     public function __construct(
         ForkedProcessorRunner $forkedProcessorRunner,
         CollectionWrapperFactory $collectionWrapperFactory
@@ -40,11 +44,11 @@ class ForkedCollectionProcessor
         int $maxChildrenProcess = 10,
         bool $isParallelize = true
     ): void {
-        $collection->setPageSize($pageSize);
-
         /** @var CollectionWrapper $itemProvider */
         $itemProvider = $this->collectionWrapperFactory->create([
-            'collection' => $collection
+            'collection' => $collection,
+            'maxChildrenProcess' => $maxChildrenProcess,
+            'pageSize' => $pageSize
         ]);
 
         $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize);

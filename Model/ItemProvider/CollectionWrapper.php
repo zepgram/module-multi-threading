@@ -11,9 +11,22 @@ class CollectionWrapper implements ItemProviderInterface
     /** @var Collection */
     private $collection;
 
-    public function __construct(Collection $collection)
+    /** @var int */
+    private $pageSize;
+
+    /** @var int */
+    private $maxChildrenProcess;
+
+    /**
+     * @param Collection $collection
+     * @param int $pageSize
+     * @param int $maxChildrenProcess
+     */
+    public function __construct(Collection $collection, int $pageSize, int $maxChildrenProcess)
     {
         $this->collection = $collection;
+        $this->pageSize = $pageSize;
+        $this->maxChildrenProcess = $maxChildrenProcess;
     }
 
     /**
@@ -21,9 +34,22 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function setCurrentPage(int $currentPage): void
     {
-        $this->collection->clear();
         $this->collection->setPageSize($this->getPageSize());
-        $this->collection->setCurPage($currentPage);
+        $moduloPage = $currentPage % $this->maxChildrenProcess;
+        $moduloPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
+        $this->collection->setCurPage($moduloPage);
+    }
+
+    /**
+     * @inheirtDoc
+     */
+    public function getSize(): int
+    {
+        $this->collection->clear();
+        $this->collection->setPageSize(null);
+        $this->collection->setCurPage(null);
+
+        return $this->collection->getSize();
     }
 
     /**
@@ -31,7 +57,7 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getPageSize(): int
     {
-        return (int)$this->collection->getPageSize();
+        return (int)$this->pageSize;
     }
 
     /**
@@ -39,7 +65,7 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getTotalPages(): int
     {
-        return (int)ceil($this->collection->getSize() / $this->getPageSize());
+        return (int)ceil($this->getSize() / $this->getPageSize());
     }
 
     /**
@@ -47,6 +73,8 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getItems(): array
     {
+        $this->collection->load(false, true);
+
         return $this->collection->getItems();
     }
 }

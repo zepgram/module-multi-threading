@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Zepgram\MultiThreading\Model\Processor;
 
-use Zepgram\MultiThreading\Model\Processor\ForkedProcessorFactory;
 use Zepgram\MultiThreading\Model\ItemProvider\ItemProviderInterface;
+use Zepgram\MultiThreading\Model\Processor\ForkedProcessorFactory;
 
 class ForkedProcessorRunner
 {
@@ -30,7 +30,8 @@ class ForkedProcessorRunner
         callable $callback,
         int $maxChildrenProcess,
         bool $isParallelize
-    ): void {
+    ): void
+    {
         /** @var $forkedProcessor ForkedProcessor */
         $forkedProcessor = $this->forkedProcessorFactory->create([
             'itemProvider' => $itemProvider,

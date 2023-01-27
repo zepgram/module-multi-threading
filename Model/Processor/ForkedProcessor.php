@@ -6,6 +6,7 @@ namespace Zepgram\MultiThreading\Model\Processor;
 
 use Psr\Log\LoggerInterface;
 use Throwable;
+use Zepgram\MultiThreading\Model\ItemProvider\ArrayWrapper;
 use Zepgram\MultiThreading\Model\ItemProvider\ItemProviderInterface;
 
 class ForkedProcessor
@@ -19,34 +20,37 @@ class ForkedProcessor
     /** @var callable */
     private $callback;
 
-    /** @var int|null */
+    /** @var int */
     private $maxChildrenProcess;
-
-    /** @var bool */
-    private $isParallelize;
 
     /** @var bool */
     private $running = true;
 
+    /**
+     * @param LoggerInterface $logger
+     * @param ItemProviderInterface $itemProvider
+     * @param callable $callback
+     * @param int $maxChildrenProcess
+     * @param bool $isParallelize
+     */
     public function __construct(
         LoggerInterface $logger,
         ItemProviderInterface $itemProvider,
         callable $callback,
-        ?int $maxChildrenProcess = 10,
+        int $maxChildrenProcess = 10,
         bool $isParallelize = true
     ) {
         $this->logger = $logger;
         $this->itemProvider = $itemProvider;
         $this->callback = $callback;
         $this->maxChildrenProcess = $isParallelize ? $maxChildrenProcess : 1;
-        $this->isParallelize = $isParallelize;
         pcntl_signal(SIGINT, [$this, 'handleSigInt']);
     }
 
     public function process(): void
     {
         while ($this->running) {
-            if ($this->isParallelize) {
+            if ($this->maxChildrenProcess > 1) {
                 $this->handleMultipleChildProcesses();
             } else {
                 $this->handleSingleChildProcesses();
@@ -57,49 +61,32 @@ class ForkedProcessor
     private function handleSingleChildProcesses(): void
     {
         $currentPage = 1;
-        $totalPages = $this->itemProvider->getTotalPages();
         $childProcessCounter = 0;
+        $totalPages = $this->itemProvider->getTotalPages();
 
         while ($currentPage <= $totalPages) {
+            // create fork
             $pid = pcntl_fork();
-            $childProcessCounter++;
-
-            if (!$pid) {
-                $this->itemProvider->setCurrentPage($currentPage);
-                $items = $this->itemProvider->getItems();
-                $this->logger->info('Running child process', [
-                    'pid' => getmypid(),
-                    'child_process_counter' => $childProcessCounter,
-                    'memory_usage' => $this->getMemoryUsage(),
-                    'items' => count($items),
-                    'current_page' => $currentPage,
-                    'remaining_pages' => $totalPages - $currentPage,
-                    'total_pages' => $totalPages
-                ]);
-                foreach ($items as $item) {
-                    try {
-                        call_user_func($this->callback, $item);
-                    } catch (Throwable $e) {
-                        $this->logger->error('Error occurred on callback function while processing item', [
-                            'exception' => $e,
-                        ]);
-                    }
-                }
+            if ($pid == -1) {
+                $this->logger->error('Could not fork the process');
+            } elseif ($pid) {
+                // parent process
+                $childProcessCounter++;
+            } else {
+                // child process
+                $this->processChild($currentPage, $totalPages, $childProcessCounter);
                 exit(0);
             }
 
-            pcntl_waitpid($pid, $status);
-            $status = pcntl_wexitstatus($status);
-            if ($status !== 0) {
-                $this->logger->error('Error with child process exit code: ' . $status);
+            $pid = pcntl_waitpid($pid, $status);
+            if (pcntl_wexitstatus($status) != 0) {
+                $this->logger->error('Error with child process', [
+                    'pid' => $pid,
+                    'exit_code' => $status
+                ]);
             }
-            $childProcessCounter--;
-            $this->logger->info('Finished child process', [
-                'pid' => $pid,
-                'child_process_counter' => $childProcessCounter,
-                'memory_usage' => $this->getMemoryUsage()
-            ]);
 
+            $childProcessCounter--;
             $currentPage++;
             if ($currentPage > $totalPages) {
                 $this->running = false;
@@ -115,16 +102,19 @@ class ForkedProcessor
         $totalPages = $this->itemProvider->getTotalPages();
 
         while ($currentPage <= $totalPages) {
+            // manage children
             while ($childProcessCounter >= $this->maxChildrenProcess) {
                 $pid = pcntl_wait($status);
+                if (pcntl_wexitstatus($status) != 0) {
+                    $this->logger->error('Error with child process', [
+                        'pid' => $pid,
+                        'exit_code' => $status
+                    ]);
+                }
                 $childProcessCounter--;
-                $this->logger->info('Finished child process', [
-                    'pid' => $pid,
-                    'child_process_counter' => $childProcessCounter,
-                    'memory_usage' => $this->getMemoryUsage()
-                ]);
             }
 
+            // create fork
             $pid = pcntl_fork();
             if ($pid == -1) {
                 $this->logger->error('Could not fork the process');
@@ -133,26 +123,7 @@ class ForkedProcessor
                 $childProcessCounter++;
             } else {
                 // child process
-                $this->itemProvider->setCurrentPage($currentPage);
-                $items = $this->itemProvider->getItems();
-                $this->logger->info('Running child process', [
-                    'pid' => getmypid(),
-                    'child_process_counter' => $childProcessCounter,
-                    'memory_usage' => $this->getMemoryUsage(),
-                    'items' => count($items),
-                    'current_page' => $currentPage,
-                    'remaining_pages' => $totalPages - $currentPage,
-                    'total_pages' => $totalPages
-                ]);
-                foreach ($items as $item) {
-                    try {
-                        call_user_func($this->callback, $item);
-                    } catch (Throwable $e) {
-                        $this->logger->error('Error occurred on callback function will processing item', [
-                            'exception' => $e,
-                        ]);
-                    }
-                }
+                $this->processChild($currentPage, $totalPages, $childProcessCounter);
                 exit(0);
             }
 
@@ -166,16 +137,77 @@ class ForkedProcessor
         // wait children process before releasing parent
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
-            if (pcntl_wexitstatus($status) != 0) {
-                $this->logger->error('Error with child process exit code: ' . $status);
-            }
             $childProcessCounter--;
-            $this->logger->info('Finished child process', [
+            if (pcntl_wexitstatus($status) != 0) {
+                $this->logger->error('Error with child process', [
+                    'pid' => $pid,
+                    'exit_code' => $status
+                ]);
+            }
+            $this->logger->info('Finished last child process', [
                 'pid' => $pid,
-                'child_process_counter' => $childProcessCounter,
+                'child_process_counter' => $childProcessCounter + 1,
                 'memory_usage' => $this->getMemoryUsage()
             ]);
         }
+
+        // fallback based on database query
+        if (!$this->itemProvider instanceof ArrayWrapper) {
+            $size = $this->itemProvider->getSize();
+            $this->logger->info('Missing items from original query collection', ['total_items' => $size]);
+            if ($size !== 0) {
+                $this->handleMultipleChildProcesses();
+            }
+        }
+    }
+
+    private function processChild(int $currentPage, int $totalPages, int $childProcessCounter): void
+    {
+        $itemProceed = 0;
+        try {
+            $this->itemProvider->setCurrentPage($currentPage);
+            $items = $this->itemProvider->getItems();
+        } catch (Throwable $e) {
+            $this->logger->error('Error while loading collection', [
+                'pid' => getmypid(),
+                'current_page' => $currentPage,
+                'exception' => $e
+            ]);
+            exit(1);
+        }
+
+        $this->logger->info('Running child process', [
+            'pid' => getmypid(),
+            'child_process_counter' => $childProcessCounter + 1,
+            'memory_usage' => $this->getMemoryUsage(),
+            'item_counter' => count($items),
+            'current_page' => $currentPage,
+            'remaining_pages' => $totalPages - $currentPage,
+            'total_pages' => $totalPages
+        ]);
+
+        foreach ($items as $item) {
+            try {
+                call_user_func($this->callback, $item);
+                $itemProceed++;
+            } catch (Throwable $e) {
+                $this->logger->error('Error on callback function will processing item', [
+                    'pid' => getmypid(),
+                    'current_page' => $currentPage,
+                    'exception' => $e,
+                ]);
+            }
+        }
+
+        $this->logger->info('Finished child process', [
+            'pid' => getmypid(),
+            'child_process_counter' => $childProcessCounter + 1,
+            'memory_usage' => $this->getMemoryUsage(),
+            'current_page' => $currentPage,
+            'remaining_pages' => $totalPages - $currentPage,
+            'total_pages' => $totalPages,
+            'item_proceed' => $itemProceed
+        ]);
     }
 
     private function handleSigInt(): void

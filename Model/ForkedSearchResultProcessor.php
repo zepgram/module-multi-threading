@@ -6,7 +6,6 @@ namespace Zepgram\MultiThreading\Model;
 
 use InvalidArgumentException;
 use Magento\Framework\Api\SearchCriteria;
-use Zepgram\MultiThreading\Model\ForkedProcessorFactory;
 use Zepgram\MultiThreading\Model\ItemProvider\SearchResultWrapper;
 use Zepgram\MultiThreading\Model\ItemProvider\SearchResultWrapperFactory;
 use Zepgram\MultiThreading\Model\Processor\ForkedProcessorRunner;
@@ -45,17 +44,15 @@ class ForkedSearchResultProcessor
         bool $isParallelize = true
     ): void {
         if (!method_exists($repository, 'getList')) {
-            throw new InvalidArgumentException(
-                sprintf('The repository class must have a method called "getList"')
-            );
+            throw new InvalidArgumentException('The repository class must have a method called "getList"');
         }
-
-        $searchCriteria->setPageSize($pageSize);
 
         /** @var SearchResultWrapper $itemProvider */
         $itemProvider = $this->searchResultWrapperFactory->create([
             'searchCriteria' => $searchCriteria,
-            'repository' => $repository
+            'repository' => $repository,
+            'pageSize' => $pageSize,
+            'maxChildrenProcess' => $maxChildrenProcess
         ]);
 
         $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize);

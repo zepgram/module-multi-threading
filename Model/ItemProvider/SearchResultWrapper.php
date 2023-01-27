@@ -15,15 +15,27 @@ class SearchResultWrapper implements ItemProviderInterface
     /** @var object */
     private $repository;
 
-    /** @var SearchResultsInterface */
-    private $searchResults;
+    private $pageSize;
 
+    /** @var int */
+    private $maxChildrenProcess;
+
+    /**
+     * @param SearchCriteria $searchCriteria
+     * @param $repository
+     * @param int $pageSize
+     * @param int $maxChildrenProcess
+     */
     public function __construct(
         SearchCriteria $searchCriteria,
-        $repository
+        $repository,
+        int $pageSize,
+        int $maxChildrenProcess
     ) {
         $this->searchCriteria = $searchCriteria;
         $this->repository = $repository;
+        $this->pageSize = $pageSize;
+        $this->maxChildrenProcess = $maxChildrenProcess;
     }
 
     /**
@@ -31,8 +43,20 @@ class SearchResultWrapper implements ItemProviderInterface
      */
     public function setCurrentPage(int $currentPage): void
     {
-        $this->searchResults = null;
-        $this->searchCriteria->setCurrentPage($currentPage);
+        $this->searchCriteria->setPageSize($this->getPageSize());
+        $moduloPage = $currentPage % $this->maxChildrenProcess;
+        $moduloPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
+        $this->searchCriteria->setCurrentPage($moduloPage);
+    }
+
+    /**
+     * @inheirtDoc
+     */
+    public function getSize(): int
+    {
+        $this->searchCriteria->setPageSize(null);
+        $this->searchCriteria->setCurrentPage(null);
+        return $this->getSearchResults()->getTotalCount();
     }
 
     /**
@@ -40,7 +64,7 @@ class SearchResultWrapper implements ItemProviderInterface
      */
     public function getPageSize(): int
     {
-        return (int) $this->searchCriteria->getPageSize();
+        return (int)$this->pageSize;
     }
 
     /**
@@ -48,7 +72,7 @@ class SearchResultWrapper implements ItemProviderInterface
      */
     public function getTotalPages(): int
     {
-        return (int) ceil($this->getSearchResults()->getTotalCount() / $this->getPageSize());
+        return (int)ceil($this->getSize() / $this->getPageSize());
     }
 
     /**
@@ -64,10 +88,6 @@ class SearchResultWrapper implements ItemProviderInterface
      */
     public function getSearchResults(): SearchResultsInterface
     {
-        if ($this->searchResults === null) {
-            $this->searchResults = $this->repository->getList($this->searchCriteria);
-        }
-
-        return $this->searchResults;
+        return $this->repository->getList($this->searchCriteria);
     }
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Zepgram\MultiThreading\Model;
 
-use Zepgram\MultiThreading\Model\ForkedProcessorFactory;
 use Zepgram\MultiThreading\Model\ItemProvider\ArrayWrapper;
 use Zepgram\MultiThreading\Model\ItemProvider\ArrayWrapperFactory;
 use Zepgram\MultiThreading\Model\Processor\ForkedProcessorRunner;
@@ -17,6 +16,10 @@ class ForkedArrayProcessor
     /** @var ArrayWrapperFactory */
     private $arrayWrapperFactory;
 
+    /**
+     * @param ForkedProcessorRunner $forkedProcessorRunner
+     * @param ArrayWrapperFactory $arrayWrapperFactory
+     */
     public function __construct(
         ForkedProcessorRunner $forkedProcessorRunner,
         ArrayWrapperFactory $arrayWrapperFactory
