@@ -15,6 +15,7 @@ class SearchResultWrapper implements ItemProviderInterface
     /** @var object */
     private $repository;
 
+    /** @var int */
     private $pageSize;
 
     /** @var int */
@@ -44,9 +45,11 @@ class SearchResultWrapper implements ItemProviderInterface
     public function setCurrentPage(int $currentPage): void
     {
         $this->searchCriteria->setPageSize($this->getPageSize());
-        $moduloPage = $currentPage % $this->maxChildrenProcess;
-        $moduloPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
-        $this->searchCriteria->setCurrentPage($moduloPage);
+        if ($this->maxChildrenProcess > 1) {
+            $moduloPage = $currentPage % $this->maxChildrenProcess;
+            $currentPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
+        }
+        $this->searchCriteria->setCurrentPage($currentPage);
     }
 
     /**
@@ -56,6 +59,7 @@ class SearchResultWrapper implements ItemProviderInterface
     {
         $this->searchCriteria->setPageSize(null);
         $this->searchCriteria->setCurrentPage(null);
+
         return $this->getSearchResults()->getTotalCount();
     }
 

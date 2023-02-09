@@ -173,6 +173,10 @@ function specified by the user on each item of that page.
   if set to false, the process will run sequentially. Running task sequentially may be useful when
   you want to keep the sort order of your items.
 
+- `$isFallBackEnabled`: This parameter is set to false by default and can be used for `ForkedSearchResultProcessor` 
+  or `ForkedCollectionProcessor` it can be useful only if your initial query has a flag
+  that will be processed in your callback method.
+
 ### Memory Limit
 This module allows to bypass the limitation of the memory limit, because the memory
 limit is reset on each child process creation. This means that even if the memory limit
@@ -183,6 +187,28 @@ system and adjust the parameters accordingly.
 
 ### Limitations
 This module uses `pcntl_fork()` function which is not available on Windows.
+
+There is limitation for Multi-threading pagination on `ForkedSearchResultProcessor` and `ForkedCollectionProcessor`:<br>
+Multi-threading pagination works only if your initial query has a flag that will be excluded 
+from results on each pagination iteration.
+
+For example:<br>
+You select all orders without a `gift_cards` value in your query, if you set a `gift_cards` value on your callback
+method and save it in database, then multi-threading and fallback system will work. 
+Otherwise, children will go for the same items because your query doesn't flag a specific column modified 
+by your callback function.<br>
+<b>So currently you need a flag to be sure to not proceed the same items</b>.
+
+Workaround:<br>
+You can create your own flag by using a column like modified_at in your collection/searchCriteria query 
+to request items with a modified_at value lower than the current timestamp, then you just have to update 
+the modified_at column in your callback method and set the current timestamp. 
+This way your query will fetch fresh items on each iteration.
+
+I will provide support to handle this soon, sorry for the inconvenient.
+Until then if you want to process data, I recommend usage of single thread solution, 
+or the `ForkedArrayProcessor` which is not impacted by pagination system.
+
 
 ### Conclusion
 This module provides a useful tool for running commands or processing collections
@@ -199,3 +225,4 @@ As such, it is the responsibility of the user of this module to thoroughly test 
 development environment before deploying it to a production environment.
 I decline all responsibility for any issues or damages that may occur as a result of using
 this module. Great power comes with greater responsibility, use it wisely.
+

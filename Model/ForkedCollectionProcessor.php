@@ -35,22 +35,24 @@ class ForkedCollectionProcessor
      * @param int $pageSize
      * @param int $maxChildrenProcess
      * @param bool $isParallelize
+     * @param bool $isFallBackEnabled
      * @return void
      */
     public function process(
         Collection $collection,
         callable $callback,
-        int $pageSize = 100,
+        int $pageSize = 1000,
         int $maxChildrenProcess = 10,
-        bool $isParallelize = true
+        bool $isParallelize = true,
+        bool $isFallBackEnabled = false
     ): void {
         /** @var CollectionWrapper $itemProvider */
         $itemProvider = $this->collectionWrapperFactory->create([
             'collection' => $collection,
             'maxChildrenProcess' => $maxChildrenProcess,
-            'pageSize' => $pageSize
+            'pageSize' => $pageSize,
         ]);
 
-        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize);
+        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize, $isFallBackEnabled);
     }
 }

@@ -39,7 +39,7 @@ class ForkedArrayProcessor
     public function process(
         array $array,
         callable $callback,
-        int $pageSize = 100,
+        int $pageSize = 1000,
         int $maxChildrenProcess = 10,
         bool $isParallelize = true
     ): void {
@@ -49,6 +49,6 @@ class ForkedArrayProcessor
             'pageSize' => $pageSize
         ]);
 
-        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize);
+        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize, false);
     }
 }

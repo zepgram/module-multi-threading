@@ -6,7 +6,6 @@ namespace Zepgram\MultiThreading\Model\Processor;
 
 use Psr\Log\LoggerInterface;
 use Throwable;
-use Zepgram\MultiThreading\Model\ItemProvider\ArrayWrapper;
 use Zepgram\MultiThreading\Model\ItemProvider\ItemProviderInterface;
 
 class ForkedProcessor
@@ -24,6 +23,9 @@ class ForkedProcessor
     private $maxChildrenProcess;
 
     /** @var bool */
+    private $isFallBackEnabled;
+
+    /** @var bool */
     private $running = true;
 
     /**
@@ -32,18 +34,21 @@ class ForkedProcessor
      * @param callable $callback
      * @param int $maxChildrenProcess
      * @param bool $isParallelize
+     * @param bool $isFallBackEnabled
      */
     public function __construct(
         LoggerInterface $logger,
         ItemProviderInterface $itemProvider,
         callable $callback,
         int $maxChildrenProcess = 10,
-        bool $isParallelize = true
+        bool $isParallelize = true,
+        bool $isFallBackEnabled = false
     ) {
         $this->logger = $logger;
         $this->itemProvider = $itemProvider;
         $this->callback = $callback;
         $this->maxChildrenProcess = $isParallelize ? $maxChildrenProcess : 1;
+        $this->isFallBackEnabled = $isFallBackEnabled;
         pcntl_signal(SIGINT, [$this, 'handleSigInt']);
     }
 
@@ -151,8 +156,8 @@ class ForkedProcessor
             ]);
         }
 
-        // fallback based on database query
-        if (!$this->itemProvider instanceof ArrayWrapper) {
+        // Fallback based on database query
+        if ($this->isFallBackEnabled) {
             $size = $this->itemProvider->getSize();
             $this->logger->info('Missing items from original query collection', ['total_items' => $size]);
             if ($size !== 0) {

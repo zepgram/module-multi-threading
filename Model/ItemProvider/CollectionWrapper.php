@@ -35,9 +35,11 @@ class CollectionWrapper implements ItemProviderInterface
     public function setCurrentPage(int $currentPage): void
     {
         $this->collection->setPageSize($this->getPageSize());
-        $moduloPage = $currentPage % $this->maxChildrenProcess;
-        $moduloPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
-        $this->collection->setCurPage($moduloPage);
+        if ($this->maxChildrenProcess > 1) {
+            $moduloPage = $currentPage % $this->maxChildrenProcess;
+            $currentPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
+        }
+        $this->collection->setCurPage($currentPage);
     }
 
     /**
