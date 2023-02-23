@@ -51,9 +51,9 @@ class MyAwesomeClass
         $searchCriteria,
         $productRepository,
         $callback,
-        $pageSize = 100,
+        $pageSize = 1000,
         $maxChildrenProcess = 10,
-        $isParallelize = true
+        $isIdempotent = true
     );
 }
 ```
@@ -86,9 +86,9 @@ class MyAwesomeClass
         $searchCriteria,
         $productRepository,
         $callback,
-        $pageSize = 100,
+        $pageSize = 1000,
         $maxChildrenProcess = 10,
-        $isParallelize = true
+        $isIdempotent = true
     );
 }
 ```
@@ -119,8 +119,7 @@ class MyAwesomeClass
         $array,
         $callback,
         $pageSize = 2,
-        $maxChildrenProcess = 2,
-        $isParallelize = true
+        $maxChildrenProcess = 2
     );
 }
 ```
@@ -166,16 +165,18 @@ function specified by the user on each item of that page.
 
 - `$maxChildrenProcess`: This parameter is used to set the maximum number of child
   processes that can be run simultaneously. This is used to control the number of threads
-  that will be used by the multi-threading process.
+  that will be used by the multi-threading process. If set to 1, by definition you will have no parallelization, 
+  the parent process will wait the child process to finish before creating another one.
 
-- `$isParallelize`: This parameter is used to set whether the multi-threading process should run
-  in parallel or sequentially. If set to true, the process will run in parallel,
-  if set to false, the process will run sequentially. Running task sequentially may be useful when
-  you want to keep the sort order of your items.
-
-- `$isFallBackEnabled`: This parameter is set to false by default and can be used for `ForkedSearchResultProcessor` 
-  or `ForkedCollectionProcessor` it can be useful only if your initial query has a flag
-  that will be processed in your callback method.
+- `$isIdempotent`: This parameter is a flag set to `true` by default and can be used for `ForkedSearchResultProcessor` 
+  or `ForkedCollectionProcessor` when your `$maxChildrenProcess` is greater than one.
+  While fetching data from database with `ForkedSearchResult` and `ForkedCollectionProcessor` you may change values
+  queried: by modifying items on columns queried you will change the nature of the initial collection query and at the end, 
+  the OFFSET limit in the query will be invalid because the native pagination system expect the pagination to be
+  processed by only one process. To avoid that, set `$isIdempotent` to `false`.<br>
+  E.G.: In your collection query, you request all products `disabled`, in your callback method you `enable` and save 
+  them in database, then in this particular case you are modifying the column that you request in your collection,
+  your query is not idempotent.
 
 ### Memory Limit
 This module allows to bypass the limitation of the memory limit, because the memory
@@ -187,28 +188,6 @@ system and adjust the parameters accordingly.
 
 ### Limitations
 This module uses `pcntl_fork()` function which is not available on Windows.
-
-There is limitation for Multi-threading pagination on `ForkedSearchResultProcessor` and `ForkedCollectionProcessor`:<br>
-Multi-threading pagination works only if your initial query has a flag that will be excluded 
-from results on each pagination iteration.
-
-For example:<br>
-You select all orders without a `gift_cards` value in your query, if you set a `gift_cards` value on your callback
-method and save it in database, then multi-threading and fallback system will work. 
-Otherwise, children will go for the same items because your query doesn't flag a specific column modified 
-by your callback function.<br>
-<b>So currently you need a flag to be sure to not proceed the same items</b>.
-
-Workaround:<br>
-You can create your own flag by using a column like modified_at in your collection/searchCriteria query 
-to request items with a modified_at value lower than the current timestamp, then you just have to update 
-the modified_at column in your callback method and set the current timestamp. 
-This way your query will fetch fresh items on each iteration.
-
-I will provide support to handle this soon, sorry for the inconvenient.
-Until then if you want to process data, I recommend usage of single thread solution, 
-or the `ForkedArrayProcessor` which is not impacted by pagination system.
-
 
 ### Conclusion
 This module provides a useful tool for running commands or processing collections

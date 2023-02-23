@@ -32,8 +32,7 @@ class ForkedSearchResultProcessor
      * @param callable $callback
      * @param int $pageSize
      * @param int $maxChildrenProcess
-     * @param bool $isParallelize
-     * @param bool $isFallBackEnabled
+     * @param bool $isIdempotent
      * @return void
      */
     public function process(
@@ -42,8 +41,7 @@ class ForkedSearchResultProcessor
         callable $callback,
         int $pageSize = 1000,
         int $maxChildrenProcess = 10,
-        bool $isParallelize = true,
-        bool $isFallBackEnabled = false
+        bool $isIdempotent = true
     ): void {
         if (!method_exists($repository, 'getList')) {
             throw new InvalidArgumentException('The repository class must have a method called "getList"');
@@ -54,9 +52,10 @@ class ForkedSearchResultProcessor
             'searchCriteria' => $searchCriteria,
             'repository' => $repository,
             'pageSize' => $pageSize,
-            'maxChildrenProcess' => $maxChildrenProcess
+            'maxChildrenProcess' => $maxChildrenProcess,
+            'isIdempotent' => $isIdempotent
         ]);
 
-        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize, $isFallBackEnabled);
+        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess);
     }
 }

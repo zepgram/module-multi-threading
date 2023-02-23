@@ -66,4 +66,12 @@ class ArrayWrapper implements ItemProviderInterface
 
         return array_slice($this->items, $offset, $this->pageSize);
     }
+
+    /**
+     * @inheirtDoc
+     */
+    public function isIdempotent(): bool
+    {
+        return true;
+    }
 }

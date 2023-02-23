@@ -17,16 +17,25 @@ class CollectionWrapper implements ItemProviderInterface
     /** @var int */
     private $maxChildrenProcess;
 
+    /** @var bool */
+    private $isIdempotent;
+
     /**
      * @param Collection $collection
      * @param int $pageSize
      * @param int $maxChildrenProcess
+     * @param bool $isIdempotent
      */
-    public function __construct(Collection $collection, int $pageSize, int $maxChildrenProcess)
-    {
+    public function __construct(
+        Collection $collection,
+        int $pageSize,
+        int $maxChildrenProcess,
+        bool $isIdempotent
+    ) {
         $this->collection = $collection;
         $this->pageSize = $pageSize;
         $this->maxChildrenProcess = $maxChildrenProcess;
+        $this->isIdempotent = $maxChildrenProcess > 1 ? $isIdempotent : true;
     }
 
     /**
@@ -35,7 +44,7 @@ class CollectionWrapper implements ItemProviderInterface
     public function setCurrentPage(int $currentPage): void
     {
         $this->collection->setPageSize($this->getPageSize());
-        if ($this->maxChildrenProcess > 1) {
+        if (!$this->isIdempotent()) {
             $moduloPage = $currentPage % $this->maxChildrenProcess;
             $currentPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
         }
@@ -78,5 +87,13 @@ class CollectionWrapper implements ItemProviderInterface
         $this->collection->load(false, true);
 
         return $this->collection->getItems();
+    }
+
+    /**
+     * @inheirtDoc
+     */
+    public function isIdempotent(): bool
+    {
+        return $this->isIdempotent;
     }
 }

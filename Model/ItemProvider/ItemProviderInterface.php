@@ -31,4 +31,9 @@ interface ItemProviderInterface
      * @return array
      */
     public function getItems(): array;
+
+    /**
+     * @return bool
+     */
+    public function isIdemPotent(): bool;
 }

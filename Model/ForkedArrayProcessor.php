@@ -33,15 +33,13 @@ class ForkedArrayProcessor
      * @param callable $callback
      * @param int $pageSize
      * @param int $maxChildrenProcess
-     * @param bool $isParallelize
      * @return void
      */
     public function process(
         array $array,
         callable $callback,
         int $pageSize = 1000,
-        int $maxChildrenProcess = 10,
-        bool $isParallelize = true
+        int $maxChildrenProcess = 10
     ): void {
         /** @var ArrayWrapper $itemProvider */
         $itemProvider = $this->arrayWrapperFactory->create([
@@ -49,6 +47,6 @@ class ForkedArrayProcessor
             'pageSize' => $pageSize
         ]);
 
-        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess, $isParallelize, false);
+        $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess);
     }
 }

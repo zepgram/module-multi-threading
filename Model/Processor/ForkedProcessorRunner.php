@@ -22,24 +22,18 @@ class ForkedProcessorRunner
      * @param ItemProviderInterface $itemProvider
      * @param callable $callback
      * @param int $maxChildrenProcess
-     * @param bool $isParallelize
-     * @param bool $isFallBackEnabled
      * @return void
      */
     public function run(
         ItemProviderInterface $itemProvider,
         callable $callback,
-        int $maxChildrenProcess,
-        bool $isParallelize,
-        bool $isFallBackEnabled
+        int $maxChildrenProcess
     ): void {
         /** @var $forkedProcessor ForkedProcessor */
         $forkedProcessor = $this->forkedProcessorFactory->create([
             'itemProvider' => $itemProvider,
             'callback' => $callback,
             'maxChildrenProcess' => $maxChildrenProcess,
-            'isParallelize' => $isParallelize,
-            'isFallBackEnabled' => $isFallBackEnabled
         ]);
 
         $forkedProcessor->process();
