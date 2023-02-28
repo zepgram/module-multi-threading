@@ -96,6 +96,7 @@ class ForkedProcessor
     {
         $currentPage = 1;
         $childProcessCounter = 0;
+        $childPids = [];
         $totalPages = $this->itemProvider->getTotalPages();
 
         while ($currentPage <= $totalPages) {
@@ -107,6 +108,7 @@ class ForkedProcessor
                         'pid' => $pid,
                         'exit_code' => $status
                     ]);
+                    unset($childPids[$pid]);
                 }
                 $childProcessCounter--;
             }
@@ -118,6 +120,7 @@ class ForkedProcessor
             } elseif ($pid) {
                 // parent process
                 $childProcessCounter++;
+                $childPids[$pid] = $currentPage;
             } else {
                 // child process
                 $this->processChild($currentPage, $totalPages, $childProcessCounter);
@@ -140,12 +143,22 @@ class ForkedProcessor
                     'pid' => $pid,
                     'exit_code' => $status
                 ]);
+                unset($childPids[$pid]);
             }
             $this->logger->info('Finished last child process', [
                 'pid' => $pid,
                 'child_process_counter' => $childProcessCounter + 1,
                 'memory_usage' => $this->getMemoryUsage()
             ]);
+        }
+
+        // Fallback based on missing pages
+        $missingPages = array_unique(array_diff(range(1, $totalPages), $childPids));
+        if (!empty($missingPages)) {
+            $this->logger->info('Fallback on missing pages', ['missing_pages' => array_values($missingPages)]);
+        }
+        foreach ($missingPages as $page) {
+            $this->processChild($page, $totalPages, 0);
         }
 
         // Fallback based on database query
@@ -194,6 +207,10 @@ class ForkedProcessor
                     'exception' => $e,
                 ]);
             }
+        }
+
+        if ($itemProceed === 0) {
+            exit(1);
         }
 
         $this->logger->info('Finished child process', [
