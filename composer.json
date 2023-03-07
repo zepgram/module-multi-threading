@@ -2,7 +2,7 @@
     "name": "zepgram/module-multi-threading",
     "description": "This module is a powerful tool for developers who want to process large data sets in a short amount of time",
     "type": "magento2-module",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "authors": [
         {
             "name": "Benjamin Calef",
@@ -11,6 +11,7 @@
     ],
     "require": {
         "magento/framework": "^101.0.0|^102.0.0|^103.0.0",
+        "magento/module-store": "^101",
         "ext-pcntl": "*"
     },
     "autoload": {
@@ -26,6 +27,11 @@
         "repo.magento.com": {
             "type": "composer",
             "url": "https://repo.magento.com/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "magento/composer-dependency-version-audit-plugin": true
         }
     }
 }

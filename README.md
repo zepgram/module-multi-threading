@@ -109,7 +109,7 @@ class MyAwesomeClass
         $this->forkedArrayProcessor = $forkedArrayProcessor;
     }
     
-    $array = [1,2,3,4,5];
+    $array = [1,2,3,4,5,...];
     $callback = function ($item) {
         echo $item;
         // do your business logic here
@@ -120,6 +120,63 @@ class MyAwesomeClass
         $callback,
         $pageSize = 2,
         $maxChildrenProcess = 2
+    );
+}
+```
+
+### ParallelStoreProcessor or ParallelWebsiteProcessor
+
+```php
+use Zepgram\MultiThreading\Model\Dimension\ParallelStoreProcessor;
+use Magento\Catalog\Model\ResourceModel\Product\Collection;
+use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
+
+class MyAwesomeClass
+{
+    /** @var ParallelStoreProcessor */
+    private $parallelStoreProcessor;
+    
+    /** @var CollectionFactory */
+    private $collectionFactory;
+    
+    public function __construct(
+        ParallelStoreProcessor $parallelStoreProcessor,
+        CollectionFactory $collectionFactory
+    ) {
+        $this->parallelStoreProcessor = $parallelStoreProcessor;
+        $this->collectionFactory = $collectionFactory;
+    }
+    
+    $array = [1,2,3,4,5,...];
+    $callback = function (StoreInterface $store) {
+        // retrieve data from database foreach stores (do not load the collection !)
+        $collection = $this->collectionFactory->create();
+        $collection->addFieldToFilter('type_id', 'simple')
+            ->addFieldToSelect(['sku', 'description', 'created_at'])
+            ->setStoreId($store->getId())
+            ->addStoreFilter($store->getId())
+            ->distinct(true);
+            
+        // handle pagination system to avoid memory leak
+        $currentPage = 1;
+        $pageSize = 1000;
+        $totalPages = (int)ceil($collection->getSize() / $pageSize);
+        while ($currentPage <= $totalPages) {
+            $collection->setCurPage($currentPage);
+            $collection->setPageSize($pageSize);
+            foreach ($collection->getItems() as $product) {
+                // do your business logic here
+            }
+            $currentPage++;
+        }
+    };
+    
+    // your collection will be processed foreach store by a dedicated child process
+    $this->parallelStoreProcessor->process(
+        $callback,
+        $maxChildrenProcess = null,
+        $onlyActiveStores = true,
+        $withDefaultStore = false
     );
 }
 ```
@@ -149,6 +206,15 @@ The `ForkedSearchResultProcessor`,`ForkedCollectionProcessor` and `ForkedArrayPr
 use a similar approach to process a search criteria or a collection. The process is divided
 into several pages, and for each page, a child process is created to run the callback
 function specified by the user on each item of that page.
+
+The `ParallelStoreProcessor` and `ParallelWebsiteProcessor` classes are designed to make it easier 
+to process a list of stores or websites in parallel. To use either of these classes, you'll need to
+provide a callback function that will be called for each store or website in the list. The callback 
+function should take one parameter, which will be a single store or website object.<br>
+Each store or website will be passed to the callback function in a separate process, 
+allowing faster processing times.
+The number of children process cannot exceed the number of stores or websites: for example,
+if you have 10 stores, the maximum number of child processes that can be created in parallel is 10.
 
 #### Here is a breakdown of the parameters:
 - `$collection`/`$searchCriteria`/`$array`: The first parameter is the data source,
