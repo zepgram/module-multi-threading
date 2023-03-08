@@ -1,4 +1,7 @@
 <?php
+/**
+ * Copyright © Username, Inc. All rights reserved.
+ */
 
 declare(strict_types=1);
 
