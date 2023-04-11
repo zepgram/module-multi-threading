@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace Zepgram\MultiThreading\Model;
+namespace Zepgram\MultiThreading\Model\Dimension;
 
 use Magento\Store\Api\Data\WebsiteInterface;
 use Magento\Store\Api\WebsiteRepositoryInterface;
