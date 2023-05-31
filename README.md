@@ -6,7 +6,7 @@ using multiple child processes, improving performance and reducing processing ti
 
 ## Installation
 ```php
-composer require zepgram/multi-threading
+composer require zepgram/module-multi-threading
 bin/magento module:enable Zepgram_MultiThreading
 bin/magento setup:upgrade
 ```
