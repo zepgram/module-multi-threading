@@ -44,7 +44,8 @@ class ForkedProcessor
         $this->itemProvider = $itemProvider;
         $this->callback = $callback;
         $this->maxChildrenProcess = $maxChildrenProcess;
-        pcntl_signal(SIGINT, [$this, 'handleSigInt']);
+        pcntl_signal(SIGINT, [$this, 'handleSig']);
+        pcntl_signal(SIGTERM, [$this, 'handleSig']);
     }
 
     public function process(): void
@@ -56,6 +57,11 @@ class ForkedProcessor
                 $this->handleSingleChildProcesses();
             }
         }
+    }
+
+    public function handleSig(): void
+    {
+        $this->running = false;
     }
 
     private function handleSingleChildProcesses(): void
@@ -225,11 +231,6 @@ class ForkedProcessor
             'total_pages' => $totalPages,
             'item_proceed' => $itemProceed
         ]);
-    }
-
-    private function handleSigInt(): void
-    {
-        $this->running = false;
     }
 
     private function getMemoryUsage(): string
