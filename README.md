@@ -270,5 +270,5 @@ that the use of multi-threading in PHP can be complex and may have unintended co
 As such, it is the responsibility of the user of this module to thoroughly test it in a
 development environment before deploying it to a production environment.
 I decline all responsibility for any issues or damages that may occur as a result of using
-this module. Great power comes with greater responsibility, use it wisely.
+this module. With great power comes great responsibility, use it wisely.
 
