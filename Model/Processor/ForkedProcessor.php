@@ -69,6 +69,11 @@ class ForkedProcessor
         $currentPage = 1;
         $childProcessCounter = 0;
         $totalPages = $this->itemProvider->getTotalPages();
+        if ($totalPages <= 0) {
+            $this->logger->info('There is nothing to process');
+            $this->running = false;
+            return;
+        }
 
         while ($currentPage <= $totalPages) {
             // create fork
@@ -107,6 +112,11 @@ class ForkedProcessor
         $childProcessCounter = 0;
         $childPids = [];
         $totalPages = $this->itemProvider->getTotalPages();
+        if ($totalPages <= 0) {
+            $this->logger->info('There is nothing to process');
+            $this->running = false;
+            return;
+        }
 
         while ($currentPage <= $totalPages) {
             // manage children
