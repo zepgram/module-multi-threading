@@ -86,11 +86,14 @@ class ForkedProcessor
             } else {
                 // child process
                 $this->processChild($currentPage, $totalPages, $childProcessCounter);
-                exit(0);
+                register_shutdown_function(function() {
+                    posix_kill(getmypid(), SIGKILL);
+                });
+                exit;
             }
 
             $pid = pcntl_waitpid($pid, $status);
-            if (pcntl_wexitstatus($status) != 0) {
+            if (pcntl_wtermsig($status) != 9) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
                     'exit_code' => $status
@@ -122,7 +125,7 @@ class ForkedProcessor
             // manage children
             while ($childProcessCounter >= $this->maxChildrenProcess) {
                 $pid = pcntl_wait($status);
-                if (pcntl_wexitstatus($status) != 0) {
+                if (pcntl_wtermsig($status) != 9) {
                     $this->logger->error('Error with child process', [
                         'pid' => $pid,
                         'exit_code' => $status
@@ -143,7 +146,10 @@ class ForkedProcessor
             } else {
                 // child process
                 $this->processChild($currentPage, $totalPages, $childProcessCounter);
-                exit(0);
+                register_shutdown_function(function() {
+                    posix_kill(getmypid(), SIGKILL);
+                });
+                exit;
             }
 
             $currentPage++;
@@ -157,7 +163,7 @@ class ForkedProcessor
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
             $childProcessCounter--;
-            if (pcntl_wexitstatus($status) != 0) {
+            if (pcntl_wtermsig($status) != 9) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
                     'exit_code' => $status
@@ -202,7 +208,10 @@ class ForkedProcessor
                 'current_page' => $currentPage,
                 'exception' => $e
             ]);
-            exit(1);
+            register_shutdown_function(function() {
+                posix_kill(getmypid(), SIGABRT);
+            });
+            exit;
         }
 
         $this->logger->info('Running child process', [
@@ -229,7 +238,10 @@ class ForkedProcessor
         }
 
         if ($itemProceed === 0) {
-            exit(1);
+            register_shutdown_function(function() {
+                posix_kill(getmypid(), SIGABRT);
+            });
+            exit;
         }
 
         $this->logger->info('Finished child process', [
