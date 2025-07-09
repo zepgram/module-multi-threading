@@ -42,6 +42,11 @@ class ThreadProcessorCommand extends Command
             InputOption::VALUE_OPTIONAL,
             'Define the number of iteration'
         )->addOption(
+            'delay',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Define the delay in ms between each iteration'
+        )->addOption(
             'environment',
             'env',
             InputOption::VALUE_OPTIONAL,
@@ -66,12 +71,12 @@ class ThreadProcessorCommand extends Command
     {
         // Argument and option
         $commandName = $input->getArgument('command_name');
-        //$this->getApplication()->get($commandName);
 
         $environment = $input->getOption('environment');
         $envExploded = !empty($environment) ? explode(',', $environment) : null;
         $timeout = (float)$input->getOption('timeout') ?: 300;
         $iterations = $input->getOption('iterations') ?: 0;
+        $delay = (int)$input->getOption('delay') ?: 0;
 
         // Build extra env values
         $arrayEnv = null;
@@ -111,6 +116,11 @@ class ThreadProcessorCommand extends Command
             // Limit the number of iterations
             if ($iterations !== 0 && $i >= $iterations) {
                 break;
+            }
+
+            // Delay between iterations in microseconds
+            if ($delay > 0) {
+                usleep($delay * 1000);
             }
 
             // Run single thread process
