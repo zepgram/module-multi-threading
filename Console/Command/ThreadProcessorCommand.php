@@ -70,7 +70,7 @@ class ThreadProcessorCommand extends Command
 
         $environment = $input->getOption('environment');
         $envExploded = !empty($environment) ? explode(',', $environment) : null;
-        $timeout = $input->getOption('timeout') ?: 300;
+        $timeout = (float)$input->getOption('timeout') ?: 300;
         $iterations = $input->getOption('iterations') ?: 0;
 
         // Build extra env values
