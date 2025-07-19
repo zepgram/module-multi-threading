@@ -9,6 +9,7 @@ namespace Zepgram\MultiThreading\Console\Command;
 
 use Exception;
 use Magento\Framework\Console\Cli;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputArgument;
@@ -16,11 +17,18 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 class ThreadProcessorCommand extends Command
 {
     /** @var string */
     public const BINARY_MAGENTO = 'bin/magento';
+
+    /** @var Process */
+    private $currentProcess = null;
+
+    /** @var bool */
+    private bool $isAllowedToRun = true;
 
     protected function configure(): void
     {
@@ -69,6 +77,9 @@ class ThreadProcessorCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Register signal handlers before any processing
+        $this->registerSignalHandlers();
+
         // Argument and option
         $commandName = $input->getArgument('command_name');
 
@@ -112,35 +123,53 @@ class ThreadProcessorCommand extends Command
         }
 
         $i = 0;
-        while (true) {
+        while ($this->isAllowedToRun) {
             // Limit the number of iterations
             if ($iterations !== 0 && $i >= $iterations) {
                 break;
             }
 
-            // Delay between iterations in microseconds
-            if ($delay > 0) {
-                usleep($delay * 1000);
-            }
-
             // Run single thread process
-            $process = new Process($command, BP, $arrayEnv);
-            $process->setTimeout($timeout);
+            $this->currentProcess = new Process($command, BP, $arrayEnv);
+            $this->currentProcess->setTimeout($timeout);
 
-            // Handle interrupt signal
-            pcntl_signal(SIGINT, function () use ($process) {
-                $process->stop();
-            });
+            try {
+                // Run the process
+                $this->currentProcess->start();
 
-            // Run the process and output
-            $process->mustRun();
-            $output->write($process->getErrorOutput());
-            $output->write($process->getOutput());
+                while ($this->currentProcess->isRunning()) {
+                    pcntl_signal_dispatch();
+                    usleep(100000);
+                }
+
+                // Check if process failed
+                if (!$this->currentProcess->isSuccessful()) {
+                    throw new RuntimeException($this->currentProcess->getErrorOutput());
+                }
+
+                // Output results
+                $output->write($this->currentProcess->getErrorOutput());
+                $output->write($this->currentProcess->getOutput());
+
+            } catch (Throwable $e) {
+                // Clean up the process if it's still running
+                if ($this->currentProcess->isRunning()) {
+                    $this->currentProcess->stop();
+                }
+                $output->write($e->getMessage());
+            } finally {
+                $this->currentProcess = null;
+            }
 
             if ($showProgress) {
                 $progressBar->advance();
             }
             $i++;
+
+            // Delay between iterations in microseconds
+            if ($delay > 0) {
+                usleep($delay * 1000);
+            }
         }
 
         if ($showProgress) {
@@ -148,5 +177,34 @@ class ThreadProcessorCommand extends Command
         }
 
         return Cli::RETURN_SUCCESS;
+    }
+
+    /**
+     * Register signal handlers for graceful shutdown
+     */
+    private function registerSignalHandlers(): void
+    {
+        if (!extension_loaded('pcntl')) {
+            return;
+        }
+
+        pcntl_signal(SIGINT, [$this, 'handleSignal']);
+        pcntl_signal(SIGTERM, [$this, 'handleSignal']);
+
+        pcntl_async_signals(true);
+    }
+
+    /**
+     * Handle termination signals
+     *
+     * @param int $signal
+     */
+    private function handleSignal(int $signal): void
+    {
+        $this->isAllowedToRun = false;
+
+        if ($this->currentProcess && $this->currentProcess->isRunning()) {
+            $this->currentProcess->stop(5);
+        }
     }
 }
