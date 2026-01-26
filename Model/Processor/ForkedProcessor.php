@@ -44,6 +44,7 @@ class ForkedProcessor
         $this->itemProvider = $itemProvider;
         $this->callback = $callback;
         $this->maxChildrenProcess = $maxChildrenProcess;
+        pcntl_async_signals(true);
         pcntl_signal(SIGINT, [$this, 'handleSig']);
         pcntl_signal(SIGTERM, [$this, 'handleSig']);
     }
@@ -86,17 +87,16 @@ class ForkedProcessor
             } else {
                 // child process
                 $this->processChild($currentPage, $totalPages, $childProcessCounter);
-                register_shutdown_function(function() {
-                    posix_kill(getmypid(), SIGKILL);
-                });
-                exit;
+                exit(0);
             }
 
-            $pid = pcntl_waitpid($pid, $status);
-            if (pcntl_wtermsig($status) != 9) {
+            pcntl_waitpid($pid, $status);
+            if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
-                    'exit_code' => $status
+                    'exit_code' => pcntl_wifexited($status) ? pcntl_wexitstatus($status) : null,
+                    'signaled' => pcntl_wifsignaled($status),
+                    'signal' => pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : null
                 ]);
             }
 
@@ -125,10 +125,16 @@ class ForkedProcessor
             // manage children
             while ($childProcessCounter >= $this->maxChildrenProcess) {
                 $pid = pcntl_wait($status);
-                if (pcntl_wtermsig($status) != 9) {
+                if ($pid <= 0) {
+                    $this->logger->error('Error waiting for child process');
+                    break;
+                }
+                if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                     $this->logger->error('Error with child process', [
                         'pid' => $pid,
-                        'exit_code' => $status
+                        'exit_code' => pcntl_wifexited($status) ? pcntl_wexitstatus($status) : null,
+                        'signaled' => pcntl_wifsignaled($status),
+                        'signal' => pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : null
                     ]);
                     unset($childPids[$pid]);
                 }
@@ -146,10 +152,7 @@ class ForkedProcessor
             } else {
                 // child process
                 $this->processChild($currentPage, $totalPages, $childProcessCounter);
-                register_shutdown_function(function() {
-                    posix_kill(getmypid(), SIGKILL);
-                });
-                exit;
+                exit(0);
             }
 
             $currentPage++;
@@ -162,15 +165,21 @@ class ForkedProcessor
         // wait children process before releasing parent
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
+            if ($pid <= 0) {
+                $this->logger->error('Error waiting for child process');
+                break;
+            }
             $childProcessCounter--;
-            if (pcntl_wtermsig($status) != 9) {
+            if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
-                    'exit_code' => $status
+                    'exit_code' => pcntl_wifexited($status) ? pcntl_wexitstatus($status) : null,
+                    'signaled' => pcntl_wifsignaled($status),
+                    'signal' => pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : null
                 ]);
                 unset($childPids[$pid]);
             }
-            $this->logger->info('Finished last child process', [
+            $this->logger->info('Finished child process', [
                 'pid' => $pid,
                 'child_process_counter' => $childProcessCounter + 1,
                 'memory_usage' => $this->getMemoryUsage()
@@ -187,7 +196,7 @@ class ForkedProcessor
         }
 
         // Fallback based on database query
-        if (!$this->itemProvider->isIdemPotent()) {
+        if (!$this->itemProvider->isIdempotent()) {
             $size = $this->itemProvider->getSize();
             $this->logger->info('Missing items from original query collection', ['total_items' => $size]);
             if ($size !== 0) {
@@ -208,10 +217,7 @@ class ForkedProcessor
                 'current_page' => $currentPage,
                 'exception' => $e
             ]);
-            register_shutdown_function(function() {
-                posix_kill(getmypid(), SIGABRT);
-            });
-            exit;
+            exit(1);
         }
 
         $this->logger->info('Running child process', [
@@ -238,10 +244,7 @@ class ForkedProcessor
         }
 
         if ($itemProceed === 0) {
-            register_shutdown_function(function() {
-                posix_kill(getmypid(), SIGABRT);
-            });
-            exit;
+            exit(1);
         }
 
         $this->logger->info('Finished child process', [

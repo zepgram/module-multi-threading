@@ -49,7 +49,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function setCurrentPage(int $currentPage): void
     {
@@ -62,7 +62,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getSize(): int
     {
@@ -73,7 +73,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getPageSize(): int
     {
@@ -81,7 +81,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getTotalPages(): int
     {
@@ -89,7 +89,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getItems(): array
     {
@@ -97,7 +97,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function isIdempotent(): bool
     {

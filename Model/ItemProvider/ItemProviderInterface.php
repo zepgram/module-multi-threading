@@ -38,5 +38,5 @@ interface ItemProviderInterface
     /**
      * @return bool
      */
-    public function isIdemPotent(): bool;
+    public function isIdempotent(): bool;
 }

@@ -37,7 +37,7 @@ class ArrayWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getSize(): int
     {
@@ -71,7 +71,7 @@ class ArrayWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function isIdempotent(): bool
     {

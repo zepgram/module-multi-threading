@@ -42,7 +42,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function setCurrentPage(int $currentPage): void
     {
@@ -55,7 +55,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getSize(): int
     {
@@ -67,7 +67,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getPageSize(): int
     {
@@ -75,7 +75,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getTotalPages(): int
     {
@@ -83,7 +83,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getItems(): array
     {
@@ -93,7 +93,7 @@ class CollectionWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function isIdempotent(): bool
     {
