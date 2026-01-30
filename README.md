@@ -67,7 +67,7 @@ class MyAwesomeClass
 {
     /** @var ForkedCollectionProcessor */
     private $forkedCollectionProcessor;
-    
+
     public function __construct(
         ForkedCollectionProcessor $forkedCollectionProcessor,
         CollectionFactory $collectionFactory
@@ -75,16 +75,15 @@ class MyAwesomeClass
         $this->forkedCollectionProcessor = $forkedCollectionProcessor;
         $this->collectionFactory = $collectionFactory;
     }
-    
+
     $collection = $this->collectionFactory->create();
     $callback = function ($item) {
         $item->getData();
         // do your business logic here
     };
-    
+
     $this->forkedCollectionProcessor->process(
-        $searchCriteria,
-        $productRepository,
+        $collection,
         $callback,
         $pageSize = 1000,
         $maxChildrenProcess = 10,
