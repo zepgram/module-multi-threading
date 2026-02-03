@@ -167,6 +167,7 @@ class ForkedProcessor
         $currentPage = 1;
         $childProcessCounter = 0;
         $this->childPids = [];
+        $completedPages = []; // Track successful pages from the start
         $totalPages = $this->itemProvider->getTotalPages();
         
         if ($totalPages <= 0) {
@@ -199,6 +200,10 @@ class ForkedProcessor
                     ]);
                     // Keep in childPids for fallback detection (will be missing from successful set)
                 } else {
+                    // Track successful completion
+                    if ($completedPage !== null) {
+                        $completedPages[] = $completedPage;
+                    }
                     $this->logger->debug('Child process completed successfully', [
                         'pid' => $pid,
                         'page' => $completedPage
@@ -237,7 +242,6 @@ class ForkedProcessor
         }
 
         // Wait for all remaining children
-        $completedPages = [];
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
             
