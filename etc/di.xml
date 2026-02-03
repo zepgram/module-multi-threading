@@ -31,7 +31,6 @@
     <type name="Zepgram\MultiThreading\Model\Processor\ForkedProcessor">
         <arguments>
             <argument name="logger" xsi:type="object">Zepgram\MultiThreading\Logger\Logger</argument>
-            <argument name="resourceConnection" xsi:type="object">Magento\Framework\App\ResourceConnection</argument>
         </arguments>
     </type>
 </config>
