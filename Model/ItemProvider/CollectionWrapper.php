@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Zepgram, Inc. All rights reserved.
+ * Copyright © Username, Inc. All rights reserved.
  */
 
 declare(strict_types=1);
@@ -63,10 +63,10 @@ class CollectionWrapper implements ItemProviderInterface
 
     /**
      * Get total size of collection.
-     * 
+     *
      * For idempotent mode: caches result to avoid mutating collection state.
      * For non-idempotent mode: always queries fresh (items may be removed).
-     * 
+     *
      * @inheritDoc
      */
     public function getSize(): int

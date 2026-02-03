@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Zepgram, Inc. All rights reserved.
+ * Copyright © Username, Inc. All rights reserved.
  */
 
 declare(strict_types=1);
@@ -82,13 +82,13 @@ class ForkedProcessor
     public function handleSig(): void
     {
         $this->running = false;
-        
+
         // Terminate all child processes gracefully
         foreach ($this->childPids as $pid => $page) {
             $this->logger->info('Sending SIGTERM to child process', ['pid' => $pid, 'page' => $page]);
             posix_kill($pid, SIGTERM);
         }
-        
+
         // Give children time to exit gracefully (max 5 seconds)
         $timeout = time() + 5;
         while (!empty($this->childPids) && time() < $timeout) {
@@ -98,7 +98,7 @@ class ForkedProcessor
             }
             usleep(100000); // 100ms
         }
-        
+
         // Force kill any remaining children
         foreach ($this->childPids as $pid => $page) {
             $this->logger->warning('Force killing child process', ['pid' => $pid, 'page' => $page]);
@@ -113,7 +113,7 @@ class ForkedProcessor
         $currentPage = 1;
         $failedPages = [];
         $totalPages = $this->itemProvider->getTotalPages();
-        
+
         if ($totalPages <= 0) {
             $this->logger->info('There is nothing to process');
             $this->running = false;
@@ -122,7 +122,7 @@ class ForkedProcessor
 
         while ($currentPage <= $totalPages && $this->running) {
             $pid = pcntl_fork();
-            
+
             if ($pid == -1) {
                 $this->logger->error('Could not fork the process', ['page' => $currentPage]);
                 // Track failed fork for retry
@@ -130,20 +130,20 @@ class ForkedProcessor
                 $currentPage++;
                 continue;
             }
-            
+
             if ($pid === 0) {
                 // Child process
                 $exitCode = $this->processChild($currentPage, $totalPages);
                 exit($exitCode);
             }
-            
+
             // Parent process - track child
             $this->childPids[$pid] = $currentPage;
-            
+
             // Wait for this child (sequential processing)
             pcntl_waitpid($pid, $status);
             unset($this->childPids[$pid]);
-            
+
             if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
@@ -157,7 +157,7 @@ class ForkedProcessor
 
             $currentPage++;
         }
-        
+
         // Retry failed pages (once)
         if (!empty($failedPages) && $this->running) {
             $this->logger->info('Retrying failed pages in single-process mode', ['pages' => $failedPages]);
@@ -176,7 +176,7 @@ class ForkedProcessor
         $this->childPids = [];
         $completedPages = []; // Track successful pages from the start
         $totalPages = $this->itemProvider->getTotalPages();
-        
+
         if ($totalPages <= 0) {
             $this->logger->info('There is nothing to process');
             $this->running = false;
@@ -187,16 +187,16 @@ class ForkedProcessor
             // Wait for a slot if at max capacity
             while ($childProcessCounter >= $this->maxChildrenProcess && $this->running) {
                 $pid = pcntl_wait($status);
-                
+
                 if ($pid <= 0) {
                     $this->logger->error('Error waiting for child process, resetting counter');
                     // Reset counter to actual number of tracked children
                     $childProcessCounter = count($this->childPids);
                     break;
                 }
-                
+
                 $completedPage = $this->childPids[$pid] ?? null;
-                
+
                 if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                     $this->logger->error('Error with child process', [
                         'pid' => $pid,
@@ -216,7 +216,7 @@ class ForkedProcessor
                         'page' => $completedPage
                     ]);
                 }
-                
+
                 unset($this->childPids[$pid]);
                 $childProcessCounter--;
             }
@@ -228,19 +228,19 @@ class ForkedProcessor
 
             // Fork new child
             $pid = pcntl_fork();
-            
+
             if ($pid == -1) {
                 $this->logger->error('Could not fork the process', ['page' => $currentPage]);
                 $currentPage++;
                 continue;
             }
-            
+
             if ($pid === 0) {
                 // Child process
                 $exitCode = $this->processChild($currentPage, $totalPages);
                 exit($exitCode);
             }
-            
+
             // Parent process
             $childProcessCounter++;
             $this->childPids[$pid] = $currentPage;
@@ -251,15 +251,15 @@ class ForkedProcessor
         // Wait for all remaining children
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
-            
+
             if ($pid <= 0) {
                 $this->logger->error('Error waiting for remaining child process');
                 break;
             }
-            
+
             $completedPage = $this->childPids[$pid] ?? null;
             $childProcessCounter--;
-            
+
             if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
@@ -279,14 +279,14 @@ class ForkedProcessor
                     'memory_usage' => $this->getMemoryUsage()
                 ]);
             }
-            
+
             unset($this->childPids[$pid]);
         }
 
         // Calculate missing pages (pages that were forked but failed)
         $allPages = range(1, $totalPages);
         $missingPages = array_diff($allPages, $completedPages);
-        
+
         if (!empty($missingPages)) {
             $this->logger->info('Fallback on missing pages', ['missing_pages' => array_values($missingPages)]);
             foreach ($missingPages as $page) {
@@ -297,7 +297,7 @@ class ForkedProcessor
         // Non-idempotent fallback with recursion limit
         if (!$this->itemProvider->isIdempotent()) {
             $this->recursionDepth++;
-            
+
             if ($this->recursionDepth > self::MAX_RECURSION_DEPTH) {
                 $this->logger->error('Maximum recursion depth reached for non-idempotent processing', [
                     'depth' => $this->recursionDepth,
@@ -306,13 +306,13 @@ class ForkedProcessor
                 $this->running = false;
                 return;
             }
-            
+
             $size = $this->itemProvider->getSize();
             $this->logger->info('Checking for remaining items in non-idempotent mode', [
                 'total_items' => $size,
                 'recursion_depth' => $this->recursionDepth
             ]);
-            
+
             if ($size > 0) {
                 $this->handleMultipleChildProcesses();
                 return;
@@ -343,7 +343,7 @@ class ForkedProcessor
             $this->logger->error('Error while loading collection', [
                 'pid' => getmypid(),
                 'current_page' => $currentPage,
-                'exception' => $e->getMessage()
+                'exception' => $e
             ]);
             return 1;
         }
@@ -374,7 +374,7 @@ class ForkedProcessor
                 $this->logger->error('Error on callback function while processing item', [
                     'pid' => getmypid(),
                     'current_page' => $currentPage,
-                    'exception' => $e->getMessage(),
+                    'exception' => $e,
                 ]);
             }
         }
@@ -409,7 +409,7 @@ class ForkedProcessor
     private function processChildInParent(int $page, int $totalPages): void
     {
         $itemProceed = 0;
-        
+
         try {
             $this->itemProvider->setCurrentPage($page);
             $items = $this->itemProvider->getItems();
@@ -417,7 +417,7 @@ class ForkedProcessor
         } catch (Throwable $e) {
             $this->logger->error('Error while loading collection in fallback', [
                 'page' => $page,
-                'exception' => $e->getMessage()
+                'exception' => $e
             ]);
             return;
         }
@@ -439,7 +439,7 @@ class ForkedProcessor
             } catch (Throwable $e) {
                 $this->logger->error('Error on callback function in fallback', [
                     'page' => $page,
-                    'exception' => $e->getMessage(),
+                    'exception' => $e,
                 ]);
             }
         }
@@ -466,7 +466,7 @@ class ForkedProcessor
             } catch (Throwable $e) {
                 $this->logger->warning('Failed to close database connection in child process', [
                     'pid' => getmypid(),
-                    'exception' => $e->getMessage()
+                    'exception' => $e
                 ]);
             }
         }
