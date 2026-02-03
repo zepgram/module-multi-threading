@@ -37,7 +37,7 @@ class ForkedProcessor
     /** @var int Current recursion depth for non-idempotent fallback */
     private $recursionDepth = 0;
 
-    /** @var ResourceConnection|null */
+    /** @var ResourceConnection */
     private $resourceConnection;
 
     /**
