@@ -6,10 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-#### Critical Bugs (2)
+#### Critical Bugs (4)
 - **[CRIT-1] Fallback exit() in parent context**: Fixed `processChild()` being called directly in parent context during fallback, which would call `exit(1)` and kill the parent process. Added new `processChildInParent()` method that handles errors gracefully without calling `exit()`.
 
 - **[CRIT-2] Infinite recursion in non-idempotent mode**: Added `MAX_RECURSION_DEPTH` constant (default: 10) to prevent stack overflow when using `isIdempotent=false`. The processor now logs an error and stops gracefully when the limit is reached.
+
+- **[CRIT-3] Division by zero with pageSize=0**: Added validation in all ItemProvider constructors (`ArrayWrapper`, `CollectionWrapper`, `SearchResultWrapper`) to throw `InvalidArgumentException` when `pageSize <= 0`. Previously, this would cause a fatal division by zero error in `getTotalPages()`.
+
+- **[CRIT-4] Database connection corruption after fork**: Added `ResourceConnection` dependency to `ForkedProcessor` and `reconnectDatabase()` method. After `pcntl_fork()`, parent and child share the same MySQL connection handle, causing "MySQL server has gone away" errors. The child process now closes the inherited connection to force a fresh connection on first query.
 
 #### High Severity Bugs (2)
 - **[HIGH-1] Counter desync on wait error**: When `pcntl_wait()` returns an error (pid <= 0), the child process counter is now reset to the actual count of tracked children instead of breaking with a stale counter value.
@@ -40,6 +44,9 @@ All notable changes to this project will be documented in this file.
 - `CollectionWrapper::getSize()` now caches result for idempotent mode.
 - `SearchResultWrapper::getSize()` now caches result for idempotent mode and restores state.
 - Added `resetCache()` method to both wrappers for explicit cache invalidation.
+- Added `ResourceConnection` as optional constructor parameter in `ForkedProcessor`.
+- Added `reconnectDatabase()` private method to handle database connection reset in child processes.
+- Updated `di.xml` to inject `ResourceConnection` into `ForkedProcessor`.
 
 ### Notes on Non-Idempotent Mode
 

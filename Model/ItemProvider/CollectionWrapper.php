@@ -31,6 +31,7 @@ class CollectionWrapper implements ItemProviderInterface
      * @param int $pageSize
      * @param int $maxChildrenProcess
      * @param bool $isIdempotent
+     * @throws \InvalidArgumentException
      */
     public function __construct(
         Collection $collection,
@@ -38,6 +39,9 @@ class CollectionWrapper implements ItemProviderInterface
         int $maxChildrenProcess,
         bool $isIdempotent
     ) {
+        if ($pageSize <= 0) {
+            throw new \InvalidArgumentException('pageSize must be greater than 0');
+        }
         $this->collection = $collection;
         $this->pageSize = $pageSize;
         $this->maxChildrenProcess = $maxChildrenProcess;

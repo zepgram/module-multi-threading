@@ -39,6 +39,7 @@ class SearchResultWrapper implements ItemProviderInterface
      * @param int $pageSize
      * @param int $maxChildrenProcess
      * @param bool $isIdempotent
+     * @throws \InvalidArgumentException
      */
     public function __construct(
         SearchCriteria $searchCriteria,
@@ -47,6 +48,9 @@ class SearchResultWrapper implements ItemProviderInterface
         int $maxChildrenProcess,
         bool $isIdempotent
     ) {
+        if ($pageSize <= 0) {
+            throw new \InvalidArgumentException('pageSize must be greater than 0');
+        }
         $this->searchCriteria = $searchCriteria;
         $this->repository = $repository;
         $this->pageSize = $pageSize;

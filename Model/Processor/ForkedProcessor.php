@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Zepgram\MultiThreading\Model\Processor;
 
+use Magento\Framework\App\ResourceConnection;
 use Psr\Log\LoggerInterface;
 use Throwable;
 use Zepgram\MultiThreading\Model\ItemProvider\ItemProviderInterface;
@@ -36,22 +37,28 @@ class ForkedProcessor
     /** @var int Current recursion depth for non-idempotent fallback */
     private $recursionDepth = 0;
 
+    /** @var ResourceConnection|null */
+    private $resourceConnection;
+
     /**
      * @param LoggerInterface $logger
      * @param ItemProviderInterface $itemProvider
      * @param callable $callback
      * @param int $maxChildrenProcess
+     * @param ResourceConnection|null $resourceConnection
      */
     public function __construct(
         LoggerInterface $logger,
         ItemProviderInterface $itemProvider,
         callable $callback,
-        int $maxChildrenProcess = 10
+        int $maxChildrenProcess = 10,
+        ?ResourceConnection $resourceConnection = null
     ) {
         $this->logger = $logger;
         $this->itemProvider = $itemProvider;
         $this->callback = $callback;
         $this->maxChildrenProcess = $maxChildrenProcess;
+        $this->resourceConnection = $resourceConnection;
         pcntl_async_signals(true);
         pcntl_signal(SIGINT, [$this, 'handleSig']);
         pcntl_signal(SIGTERM, [$this, 'handleSig']);
@@ -321,9 +328,13 @@ class ForkedProcessor
      */
     private function processChild(int $currentPage, int $totalPages): int
     {
+        // Close inherited database connection to force new connection in child process
+        // This prevents "MySQL server has gone away" errors caused by shared connection handles
+        $this->reconnectDatabase();
+
         $itemProceed = 0;
         $itemCount = 0;
-        
+
         try {
             $this->itemProvider->setCurrentPage($currentPage);
             $items = $this->itemProvider->getItems();
@@ -438,6 +449,27 @@ class ForkedProcessor
             'items_processed' => $itemProceed,
             'items_total' => $itemCount
         ]);
+    }
+
+    /**
+     * Close and reconnect database connection in child process
+     *
+     * After pcntl_fork(), parent and child share the same MySQL connection handle.
+     * This causes "MySQL server has gone away" errors and connection state corruption.
+     * Closing the connection forces the child to establish a fresh connection.
+     */
+    private function reconnectDatabase(): void
+    {
+        if ($this->resourceConnection !== null) {
+            try {
+                $this->resourceConnection->closeConnection();
+            } catch (Throwable $e) {
+                $this->logger->warning('Failed to close database connection in child process', [
+                    'pid' => getmypid(),
+                    'exception' => $e->getMessage()
+                ]);
+            }
+        }
     }
 
     private function getMemoryUsage(): string
