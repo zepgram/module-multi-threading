@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Username, Inc. All rights reserved.
+ * Copyright © Zepgram, Inc. All rights reserved.
  */
 
 declare(strict_types=1);
@@ -27,20 +27,30 @@ class SearchResultWrapper implements ItemProviderInterface
     /** @var bool */
     private $isIdempotent;
 
+    /** @var int|null Cached size to avoid mutating searchCriteria state */
+    private $cachedSize = null;
+
+    /** @var int|null Store current page to restore after getSize */
+    private $currentPage = null;
+
     /**
      * @param SearchCriteria $searchCriteria
-     * @param $repository
+     * @param object $repository Repository with getList() method
      * @param int $pageSize
      * @param int $maxChildrenProcess
      * @param bool $isIdempotent
+     * @throws \InvalidArgumentException
      */
     public function __construct(
         SearchCriteria $searchCriteria,
-        $repository,
+        object $repository,
         int $pageSize,
         int $maxChildrenProcess,
         bool $isIdempotent
     ) {
+        if ($pageSize <= 0) {
+            throw new \InvalidArgumentException('pageSize must be greater than 0');
+        }
         $this->searchCriteria = $searchCriteria;
         $this->repository = $repository;
         $this->pageSize = $pageSize;
@@ -49,7 +59,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function setCurrentPage(int $currentPage): void
     {
@@ -58,22 +68,66 @@ class SearchResultWrapper implements ItemProviderInterface
             $moduloPage = $currentPage % $this->maxChildrenProcess;
             $currentPage = $moduloPage === 0 ? $this->maxChildrenProcess : $moduloPage;
         }
+        $this->currentPage = $currentPage;
         $this->searchCriteria->setCurrentPage($currentPage);
     }
 
     /**
-     * @inheirtDoc
+     * Get total count of items.
+     * 
+     * For idempotent mode: caches result to avoid repeated queries.
+     * For non-idempotent mode: always queries fresh (items may be removed).
+     * 
+     * @inheritDoc
      */
     public function getSize(): int
     {
-        $this->searchCriteria->setPageSize(null);
-        $this->searchCriteria->setCurrentPage(null);
+        // For non-idempotent processing, always get fresh count
+        if (!$this->isIdempotent()) {
+            return $this->getFreshSize();
+        }
 
-        return $this->getSearchResults()->getTotalCount();
+        // For idempotent processing, cache the size
+        if ($this->cachedSize === null) {
+            $this->cachedSize = $this->getFreshSize();
+        }
+
+        return $this->cachedSize;
     }
 
     /**
-     * @inheirtDoc
+     * Get fresh size from repository
+     * Preserves current pagination state after query
+     */
+    private function getFreshSize(): int
+    {
+        // Store current state
+        $savedPageSize = $this->searchCriteria->getPageSize();
+        $savedCurrentPage = $this->searchCriteria->getCurrentPage();
+
+        // Query for total count (some repositories need null pagination)
+        $this->searchCriteria->setPageSize(null);
+        $this->searchCriteria->setCurrentPage(null);
+
+        $totalCount = $this->getSearchResults()->getTotalCount();
+
+        // Restore state
+        $this->searchCriteria->setPageSize($savedPageSize);
+        $this->searchCriteria->setCurrentPage($savedCurrentPage);
+
+        return $totalCount;
+    }
+
+    /**
+     * Reset cached size (useful after processing in non-idempotent mode)
+     */
+    public function resetCache(): void
+    {
+        $this->cachedSize = null;
+    }
+
+    /**
+     * @inheritDoc
      */
     public function getPageSize(): int
     {
@@ -81,7 +135,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getTotalPages(): int
     {
@@ -89,7 +143,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getItems(): array
     {
@@ -97,7 +151,7 @@ class SearchResultWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function isIdempotent(): bool
     {

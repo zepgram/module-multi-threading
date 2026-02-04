@@ -21,9 +21,13 @@ class ArrayWrapper implements ItemProviderInterface
     /**
      * @param array $items
      * @param int $pageSize
+     * @throws \InvalidArgumentException
      */
     public function __construct(array $items, int $pageSize)
     {
+        if ($pageSize <= 0) {
+            throw new \InvalidArgumentException('pageSize must be greater than 0');
+        }
         $this->items = $items;
         $this->pageSize = $pageSize;
     }
@@ -37,7 +41,7 @@ class ArrayWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function getSize(): int
     {
@@ -71,7 +75,7 @@ class ArrayWrapper implements ItemProviderInterface
     }
 
     /**
-     * @inheirtDoc
+     * @inheritDoc
      */
     public function isIdempotent(): bool
     {
