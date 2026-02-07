@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Zepgram\MultiThreading\Model\Dimension;
 
+use InvalidArgumentException;
 use Magento\Store\Api\Data\StoreInterface;
 use Magento\Store\Api\StoreRepositoryInterface;
 use Zepgram\MultiThreading\Model\ItemProvider\ArrayWrapper;
@@ -43,10 +44,14 @@ class ParallelStoreProcessor
      */
     public function process(
         callable $callback,
-        int $maxChildrenProcess = null,
+        ?int $maxChildrenProcess = null,
         bool $onlyActiveStores = true,
         bool $withDefaultStore = false
     ): void {
+        if ($maxChildrenProcess !== null && $maxChildrenProcess <= 0) {
+            throw new InvalidArgumentException('maxChildrenProcess must be greater than 0');
+        }
+
         $stores = array_filter($this->storeRepository->getList(),
             function (StoreInterface $store) use ($onlyActiveStores, $withDefaultStore) {
                 if (!$withDefaultStore && (int)$store->getId() === 0) {
@@ -64,8 +69,12 @@ class ParallelStoreProcessor
             'pageSize' => 1
         ]);
         $storeCount = $itemProvider->getSize();
-        $maxChildrenProcess = ($maxChildrenProcess >= $storeCount || $maxChildrenProcess === null)
-            ? $storeCount : $maxChildrenProcess;
+        if ($storeCount === 0) {
+            return;
+        }
+        $maxChildrenProcess = $maxChildrenProcess === null
+            ? $storeCount
+            : min($maxChildrenProcess, $storeCount);
 
         $this->forkedProcessorRunner->run($itemProvider, $callback, $maxChildrenProcess);
     }

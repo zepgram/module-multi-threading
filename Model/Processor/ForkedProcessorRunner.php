@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Zepgram\MultiThreading\Model\Processor;
 
+use InvalidArgumentException;
 use Zepgram\MultiThreading\Model\ItemProvider\ItemProviderInterface;
 use Zepgram\MultiThreading\Model\Processor\ForkedProcessorFactory;
 
@@ -32,6 +33,10 @@ class ForkedProcessorRunner
         callable $callback,
         int $maxChildrenProcess
     ): void {
+        if ($maxChildrenProcess <= 0) {
+            throw new InvalidArgumentException('maxChildrenProcess must be greater than 0');
+        }
+
         /** @var $forkedProcessor ForkedProcessor */
         $forkedProcessor = $this->forkedProcessorFactory->create([
             'itemProvider' => $itemProvider,

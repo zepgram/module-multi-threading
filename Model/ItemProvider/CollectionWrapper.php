@@ -126,6 +126,10 @@ class CollectionWrapper implements ItemProviderInterface
      */
     public function getItems(): array
     {
+        // Force a fresh load for the current page.
+        // Without this, fallback processing in parent context may reuse already loaded items
+        // because AbstractDb::load() is a no-op when the collection is marked as loaded.
+        $this->collection->clear();
         $this->collection->load(false, true);
 
         return $this->collection->getItems();
