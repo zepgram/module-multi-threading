@@ -105,10 +105,9 @@ class SearchResultWrapper implements ItemProviderInterface
         $savedPageSize = $this->searchCriteria->getPageSize();
         $savedCurrentPage = $this->searchCriteria->getCurrentPage();
 
-        // Query total count with bounded pagination to avoid unbounded loads in repositories
-        // that load collections before setting total count.
-        $this->searchCriteria->setPageSize(1);
-        $this->searchCriteria->setCurrentPage(1);
+        // Query for total count (some repositories need null pagination)
+        $this->searchCriteria->setPageSize(null);
+        $this->searchCriteria->setCurrentPage(null);
 
         $totalCount = $this->getSearchResults()->getTotalCount();
 
