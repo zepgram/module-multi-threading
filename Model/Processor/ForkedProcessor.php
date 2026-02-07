@@ -31,27 +31,23 @@ class ForkedProcessor
     /** @var bool */
     private $running = true;
 
-    /** @var array<int, int> Map of PID => page number for active children */
+    /** @var array<int, int> */
     private $childPids = [];
 
-    /** @var int Current recursion depth for non-idempotent fallback */
+    /** @var int */
     private $recursionDepth = 0;
 
     /** @var ResourceConnection */
     private $resourceConnection;
 
-    /**
-     * @param LoggerInterface $logger
-     * @param ItemProviderInterface $itemProvider
-     * @param callable $callback
-     * @param int $maxChildrenProcess
-     * @param ResourceConnection|null $resourceConnection
-     */
+    /** @var bool */
+    private bool $reconnectDatabaseInChild;
     public function __construct(
         LoggerInterface $logger,
         ItemProviderInterface $itemProvider,
         callable $callback,
         int $maxChildrenProcess = 10,
+        bool $reconnectDatabaseInChild = false,
         ?ResourceConnection $resourceConnection = null
     ) {
         $this->logger = $logger;
@@ -59,6 +55,7 @@ class ForkedProcessor
         $this->callback = $callback;
         $this->maxChildrenProcess = $maxChildrenProcess;
         $this->resourceConnection = $resourceConnection;
+        $this->reconnectDatabaseInChild = $reconnectDatabaseInChild;
         pcntl_async_signals(true);
         pcntl_signal(SIGINT, [$this, 'handleSig']);
         pcntl_signal(SIGTERM, [$this, 'handleSig']);
@@ -75,31 +72,24 @@ class ForkedProcessor
         }
     }
 
-    /**
-     * Handle termination signals gracefully
-     * Sends SIGTERM to all children before stopping
-     */
     public function handleSig(): void
     {
         $this->running = false;
 
-        // Terminate all child processes gracefully
         foreach ($this->childPids as $pid => $page) {
             $this->logger->info('Sending SIGTERM to child process', ['pid' => $pid, 'page' => $page]);
             posix_kill($pid, SIGTERM);
         }
 
-        // Give children time to exit gracefully (max 5 seconds)
         $timeout = time() + 5;
         while (!empty($this->childPids) && time() < $timeout) {
             $pid = pcntl_wait($status, WNOHANG);
             if ($pid > 0) {
                 unset($this->childPids[$pid]);
             }
-            usleep(100000); // 100ms
+            usleep(100000);
         }
 
-        // Force kill any remaining children
         foreach ($this->childPids as $pid => $page) {
             $this->logger->warning('Force killing child process', ['pid' => $pid, 'page' => $page]);
             posix_kill($pid, SIGKILL);
@@ -125,26 +115,22 @@ class ForkedProcessor
 
             if ($pid == -1) {
                 $this->logger->error('Could not fork the process', ['page' => $currentPage]);
-                // Track failed fork for retry
                 $failedPages[] = $currentPage;
                 $currentPage++;
                 continue;
             }
 
             if ($pid === 0) {
-                // Child process
                 $exitCode = $this->processChild($currentPage, $totalPages);
-                exit($exitCode);
+                $this->terminateChild($exitCode);
             }
 
-            // Parent process - track child
             $this->childPids[$pid] = $currentPage;
 
-            // Wait for this child (sequential processing)
             pcntl_waitpid($pid, $status);
             unset($this->childPids[$pid]);
 
-            if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+            if (!$this->isSuccessfulChildStatus($status)) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
                     'page' => $currentPage,
@@ -158,7 +144,6 @@ class ForkedProcessor
             $currentPage++;
         }
 
-        // Retry failed pages (once)
         if (!empty($failedPages) && $this->running) {
             $this->logger->info('Retrying failed pages in single-process mode', ['pages' => $failedPages]);
             foreach ($failedPages as $page) {
@@ -174,7 +159,7 @@ class ForkedProcessor
         $currentPage = 1;
         $childProcessCounter = 0;
         $this->childPids = [];
-        $completedPages = []; // Track successful pages from the start
+        $failedPages = [];
         $totalPages = $this->itemProvider->getTotalPages();
 
         if ($totalPages <= 0) {
@@ -184,20 +169,18 @@ class ForkedProcessor
         }
 
         while ($currentPage <= $totalPages && $this->running) {
-            // Wait for a slot if at max capacity
             while ($childProcessCounter >= $this->maxChildrenProcess && $this->running) {
                 $pid = pcntl_wait($status);
 
                 if ($pid <= 0) {
                     $this->logger->error('Error waiting for child process, resetting counter');
-                    // Reset counter to actual number of tracked children
                     $childProcessCounter = count($this->childPids);
                     break;
                 }
 
                 $completedPage = $this->childPids[$pid] ?? null;
 
-                if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+                if (!$this->isSuccessfulChildStatus($status)) {
                     $this->logger->error('Error with child process', [
                         'pid' => $pid,
                         'page' => $completedPage,
@@ -205,12 +188,10 @@ class ForkedProcessor
                         'signaled' => pcntl_wifsignaled($status),
                         'signal' => pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : null
                     ]);
-                    // Keep in childPids for fallback detection (will be missing from successful set)
-                } else {
-                    // Track successful completion
                     if ($completedPage !== null) {
-                        $completedPages[] = $completedPage;
+                        $failedPages[] = $completedPage;
                     }
+                } else {
                     $this->logger->debug('Child process completed successfully', [
                         'pid' => $pid,
                         'page' => $completedPage
@@ -221,34 +202,30 @@ class ForkedProcessor
                 $childProcessCounter--;
             }
 
-            // Check if we should stop
             if (!$this->running) {
                 break;
             }
 
-            // Fork new child
             $pid = pcntl_fork();
 
             if ($pid == -1) {
                 $this->logger->error('Could not fork the process', ['page' => $currentPage]);
+                $failedPages[] = $currentPage;
                 $currentPage++;
                 continue;
             }
 
             if ($pid === 0) {
-                // Child process
                 $exitCode = $this->processChild($currentPage, $totalPages);
-                exit($exitCode);
+                $this->terminateChild($exitCode);
             }
 
-            // Parent process
             $childProcessCounter++;
             $this->childPids[$pid] = $currentPage;
 
             $currentPage++;
         }
 
-        // Wait for all remaining children
         while ($childProcessCounter > 0) {
             $pid = pcntl_wait($status);
 
@@ -260,7 +237,7 @@ class ForkedProcessor
             $completedPage = $this->childPids[$pid] ?? null;
             $childProcessCounter--;
 
-            if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+            if (!$this->isSuccessfulChildStatus($status)) {
                 $this->logger->error('Error with child process', [
                     'pid' => $pid,
                     'page' => $completedPage,
@@ -268,10 +245,10 @@ class ForkedProcessor
                     'signaled' => pcntl_wifsignaled($status),
                     'signal' => pcntl_wifsignaled($status) ? pcntl_wtermsig($status) : null
                 ]);
-            } else {
                 if ($completedPage !== null) {
-                    $completedPages[] = $completedPage;
+                    $failedPages[] = $completedPage;
                 }
+            } else {
                 $this->logger->info('Finished child process', [
                     'pid' => $pid,
                     'page' => $completedPage,
@@ -283,18 +260,14 @@ class ForkedProcessor
             unset($this->childPids[$pid]);
         }
 
-        // Calculate missing pages (pages that were forked but failed)
-        $allPages = range(1, $totalPages);
-        $missingPages = array_diff($allPages, $completedPages);
-
-        if (!empty($missingPages)) {
-            $this->logger->info('Fallback on missing pages', ['missing_pages' => array_values($missingPages)]);
-            foreach ($missingPages as $page) {
+        $failedPages = array_values(array_unique($failedPages));
+        if (!empty($failedPages)) {
+            $this->logger->info('Fallback on failed pages', ['failed_pages' => $failedPages]);
+            foreach ($failedPages as $page) {
                 $this->processChildInParent($page, $totalPages);
             }
         }
 
-        // Non-idempotent fallback with recursion limit
         if (!$this->itemProvider->isIdempotent()) {
             $this->recursionDepth++;
 
@@ -322,15 +295,11 @@ class ForkedProcessor
         $this->running = false;
     }
 
-    /**
-     * Process items in child context (forked process)
-     * Returns exit code: 0 for success, 1 for error
-     */
     private function processChild(int $currentPage, int $totalPages): int
     {
-        // Close inherited database connection to force new connection in child process
-        // This prevents "MySQL server has gone away" errors caused by shared connection handles
-        $this->reconnectDatabase();
+        if ($this->reconnectDatabaseInChild) {
+            $this->reconnectDatabase();
+        }
 
         $itemProceed = 0;
         $itemCount = 0;
@@ -357,13 +326,12 @@ class ForkedProcessor
             'total_pages' => $totalPages
         ]);
 
-        // Handle legitimately empty pages gracefully
         if ($itemCount === 0) {
             $this->logger->info('Page is empty, nothing to process', [
                 'pid' => getmypid(),
                 'current_page' => $currentPage
             ]);
-            return 0; // Not an error - page was just empty
+            return 0;
         }
 
         foreach ($items as $item) {
@@ -379,7 +347,6 @@ class ForkedProcessor
             }
         }
 
-        // Only return error if we had items but couldn't process any
         if ($itemCount > 0 && $itemProceed === 0) {
             $this->logger->error('Failed to process any items on page', [
                 'pid' => getmypid(),
@@ -402,10 +369,6 @@ class ForkedProcessor
         return 0;
     }
 
-    /**
-     * Process a page directly in the parent context (for fallback)
-     * Does NOT call exit() - safe for parent context
-     */
     private function processChildInParent(int $page, int $totalPages): void
     {
         $itemProceed = 0;
@@ -451,18 +414,11 @@ class ForkedProcessor
         ]);
     }
 
-    /**
-     * Close and reconnect database connection in child process
-     *
-     * After pcntl_fork(), parent and child share the same MySQL connection handle.
-     * This causes "MySQL server has gone away" errors and connection state corruption.
-     * Closing the connection forces the child to establish a fresh connection.
-     */
     private function reconnectDatabase(): void
     {
         if ($this->resourceConnection !== null) {
             try {
-                $this->resourceConnection->closeConnection();
+                $this->resourceConnection->closeConnection(null);
             } catch (Throwable $e) {
                 $this->logger->warning('Failed to close database connection in child process', [
                     'pid' => getmypid(),
@@ -470,6 +426,26 @@ class ForkedProcessor
                 ]);
             }
         }
+    }
+
+    private function isSuccessfulChildStatus(int $status): bool
+    {
+        if (pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0) {
+            return true;
+        }
+
+        return !$this->reconnectDatabaseInChild
+            && pcntl_wifsignaled($status)
+            && pcntl_wtermsig($status) === SIGKILL;
+    }
+
+    private function terminateChild(int $exitCode): void
+    {
+        if (!$this->reconnectDatabaseInChild) {
+            posix_kill(getmypid(), $exitCode === 0 ? SIGKILL : SIGABRT);
+        }
+
+        exit($exitCode);
     }
 
     private function getMemoryUsage(): string
