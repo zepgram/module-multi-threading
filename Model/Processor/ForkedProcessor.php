@@ -414,6 +414,13 @@ class ForkedProcessor
         ]);
     }
 
+    /**
+     * Close and reconnect database connection in child process
+     *
+     * After pcntl_fork(), parent and child share the same MySQL connection handle.
+     * This causes "MySQL server has gone away" errors and connection state corruption.
+     * Closing the connection forces the child to establish a fresh connection.
+     */
     private function reconnectDatabase(): void
     {
         if ($this->resourceConnection !== null) {
