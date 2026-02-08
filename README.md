@@ -186,21 +186,29 @@ class MyAwesomeClass
 This command allows running a command indefinitely in a dedicated thread using 
 the Process Symfony Component.
 ```php
-bin/magento thread:processor <command_name> [--timeout=<timeout>] [--iterations=<iterations>] [--environment=<environment>] [--progress]
+bin/magento thread:processor <command_name> [command_args...] [--timeout=<timeout>] [--iterations=<iterations>] [--delay=<delay>] [--environment=<environment>] [--progress] [--fail-on-loop] [--ignore-exit-code]
 ```
 
 #### Options
 
 - `timeout`: Define the process timeout in seconds (default: 300)
 - `iterations`: Define the number of iteration (default: 0)
+- `delay`: Define the delay in ms between each iteration (default: 0)
 - `environment`: Set environment variables separate by comma
 - `progress`: Show progress bar while executing command
+- `fail-on-loop`: Stop the iteration loop at first failure
+- `ignore-exit-code`: Return success even when some iterations fail (a warning summary is logged)
 
 ### How it works
 The `thread:processor` command creates a dedicated child process to execute existing command line.
 The child process runs the command specified by the user, while the parent process
 monitors the child process and can act accordingly. You can define iterations and execute the same command
 multiple times with a dedicated child foreach execution.
+
+By default, the wrapper returns a non-zero exit code when at least one iteration fails.
+This keeps monitoring behavior consistent with real command outcomes.
+If your workflow is retry-driven and you want eventual consistency over strict exit codes,
+use `--ignore-exit-code` to return success with a warning summary.
 
 The `ForkedSearchResultProcessor`,`ForkedCollectionProcessor` and `ForkedArrayProcessor` classes
 use a similar approach to process a search criteria or a collection. The process is divided
@@ -233,6 +241,23 @@ if you have 10 stores, the maximum number of child processes that can be created
   processes that can be run simultaneously. This is used to control the number of threads
   that will be used by the multi-threading process. If set to 1, by definition you will have no parallelization, 
   the parent process will wait the child process to finish before creating another one.
+
+- `reconnectDatabaseInChild` (constructor argument on `ForkedProcessor`): disabled by default.
+  Keep this disabled when the parent process relies on MySQL connection-scoped temporary table
+  state. This is not specific to mview: it also applies to workloads that depend on temporary
+  tables that are explicit, implicit, or otherwise virtual to the current DB session. If your
+  workload requires fresh child DB connections, you can enable it explicitly through DI.
+
+  Example (`etc/di.xml`):
+  ```xml
+  <type name="Zepgram\MultiThreading\Model\Processor\ForkedProcessor">
+      <arguments>
+          <argument name="reconnectDatabaseInChild" xsi:type="boolean">true</argument>
+      </arguments>
+  </type>
+  ```
+  Use `true` for standalone forked workloads where child processes should always open fresh DB
+  connections. Keep `false` when processing logic depends on DB session-scoped temporary state.
 
 - `$isIdempotent`: This parameter is a flag set to `true` by default and can be used for `ForkedSearchResultProcessor` 
   or `ForkedCollectionProcessor` when your `$maxChildrenProcess` is greater than one.
@@ -270,4 +295,3 @@ As such, it is the responsibility of the user of this module to thoroughly test 
 development environment before deploying it to a production environment.
 I decline all responsibility for any issues or damages that may occur as a result of using
 this module. With great power comes great responsibility, use it wisely.
-

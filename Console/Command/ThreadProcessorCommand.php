@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace Zepgram\MultiThreading\Console\Command;
 
 use Exception;
+use InvalidArgumentException;
 use Magento\Framework\Console\Cli;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
@@ -39,6 +40,10 @@ class ThreadProcessorCommand extends Command
             'command_name',
             InputArgument::REQUIRED,
             'The name of the command to be started.'
+        )->addArgument(
+            'command_args',
+            InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
+            'Arguments passed to the wrapped command'
         )->addOption(
             'timeout',
             '',
@@ -64,6 +69,16 @@ class ThreadProcessorCommand extends Command
             'p',
             InputOption::VALUE_NONE,
             'Show progress bar while executing command'
+        )->addOption(
+            'fail-on-loop',
+            '',
+            InputOption::VALUE_NONE,
+            'Stop iteration loop after the first failed iteration'
+        )->addOption(
+            'ignore-exit-code',
+            '',
+            InputOption::VALUE_NONE,
+            'Always return success exit code even when some iterations fail'
         );
 
         parent::configure();
@@ -80,14 +95,26 @@ class ThreadProcessorCommand extends Command
         // Register signal handlers before any processing
         $this->registerSignalHandlers();
 
-        // Argument and option
-        $commandName = $input->getArgument('command_name');
+        try {
+            // Argument and option
+            $rawCommandName = trim((string)$input->getArgument('command_name'));
+            if ($rawCommandName === '') {
+                throw new InvalidArgumentException('command_name cannot be empty');
+            }
+            $commandArgs = $this->getCommandArgs($rawCommandName, (array)$input->getArgument('command_args'));
 
-        $environment = $input->getOption('environment');
-        $envExploded = !empty($environment) ? explode(',', $environment) : null;
-        $timeout = (float)$input->getOption('timeout') ?: 300;
-        $iterations = $input->getOption('iterations') ?: 0;
-        $delay = (int)$input->getOption('delay') ?: 0;
+            $environment = $input->getOption('environment');
+            $envExploded = !empty($environment) ? explode(',', $environment) : null;
+            $timeout = (float)$input->getOption('timeout') ?: 300;
+            $iterations = (int)$input->getOption('iterations');
+            $delay = (int)$input->getOption('delay');
+            $failOnLoop = (bool)$input->getOption('fail-on-loop');
+            $ignoreExitCode = (bool)$input->getOption('ignore-exit-code');
+            $this->validateOptions($timeout, $iterations, $delay);
+        } catch (InvalidArgumentException $e) {
+            $output->writeln($e->getMessage());
+            return Cli::RETURN_FAILURE;
+        }
 
         // Build extra env values
         $arrayEnv = null;
@@ -107,12 +134,7 @@ class ThreadProcessorCommand extends Command
             $progressBar->start((int)$maxIteration);
         }
 
-        // Build command
-        $command = [
-            PHP_BINARY,
-            self::BINARY_MAGENTO,
-            $commandName
-        ];
+        $command = array_merge([PHP_BINARY, self::BINARY_MAGENTO], $commandArgs);
 
         // Add options
         if ($output->isVerbose()) {
@@ -123,6 +145,8 @@ class ThreadProcessorCommand extends Command
         }
 
         $i = 0;
+        $failedIterationCount = 0;
+        $successfulIterationCount = 0;
         while ($this->isAllowedToRun) {
             // Limit the number of iterations
             if ($iterations !== 0 && $i >= $iterations) {
@@ -139,24 +163,27 @@ class ThreadProcessorCommand extends Command
 
                 while ($this->currentProcess->isRunning()) {
                     pcntl_signal_dispatch();
+                    $this->flushProcessOutput($output);
                     usleep(100000);
                 }
+                $this->flushProcessOutput($output);
 
                 // Check if process failed
                 if (!$this->currentProcess->isSuccessful()) {
-                    throw new RuntimeException($this->currentProcess->getErrorOutput());
+                    throw new RuntimeException($this->buildFailureMessage($this->currentProcess));
                 }
 
-                // Output results
-                $output->write($this->currentProcess->getErrorOutput());
-                $output->write($this->currentProcess->getOutput());
-
+                $successfulIterationCount++;
             } catch (Throwable $e) {
                 // Clean up the process if it's still running
                 if ($this->currentProcess->isRunning()) {
                     $this->currentProcess->stop();
                 }
-                $output->write($e->getMessage());
+                $output->writeln($e->getMessage());
+                $failedIterationCount++;
+                if ($failOnLoop) {
+                    break;
+                }
             } finally {
                 $this->currentProcess = null;
             }
@@ -176,7 +203,21 @@ class ThreadProcessorCommand extends Command
             $progressBar->finish();
         }
 
-        return Cli::RETURN_SUCCESS;
+        if ($failedIterationCount > 0) {
+            $output->writeln(sprintf(
+                '<comment>thread:processor completed with %d failed iteration(s) and %d successful iteration(s).</comment>',
+                $failedIterationCount,
+                $successfulIterationCount
+            ));
+        }
+
+        if ($ignoreExitCode) {
+            return Cli::RETURN_SUCCESS;
+        }
+
+        return $failedIterationCount > 0
+            ? Cli::RETURN_FAILURE
+            : Cli::RETURN_SUCCESS;
     }
 
     /**
@@ -184,10 +225,6 @@ class ThreadProcessorCommand extends Command
      */
     private function registerSignalHandlers(): void
     {
-        if (!extension_loaded('pcntl')) {
-            return;
-        }
-
         pcntl_signal(SIGINT, [$this, 'handleSignal']);
         pcntl_signal(SIGTERM, [$this, 'handleSignal']);
 
@@ -206,5 +243,65 @@ class ThreadProcessorCommand extends Command
         if ($this->currentProcess && $this->currentProcess->isRunning()) {
             $this->currentProcess->stop(5);
         }
+    }
+
+    /**
+     * @param string $rawCommandName
+     * @param string[] $commandArgs
+     * @return string[]
+     */
+    private function getCommandArgs(string $rawCommandName, array $commandArgs): array
+    {
+        $parts = preg_split('/\s+/', $rawCommandName);
+        $parts = array_values(array_filter($parts, static fn ($part) => $part !== ''));
+        return array_merge($parts, $commandArgs);
+    }
+
+    private function validateOptions(float $timeout, int $iterations, int $delay): void
+    {
+        if ($timeout <= 0) {
+            throw new InvalidArgumentException('timeout must be greater than 0');
+        }
+        if ($iterations < 0) {
+            throw new InvalidArgumentException('iterations cannot be negative');
+        }
+        if ($delay < 0) {
+            throw new InvalidArgumentException('delay cannot be negative');
+        }
+    }
+
+    private function flushProcessOutput(OutputInterface $output): void
+    {
+        if ($this->currentProcess === null) {
+            return;
+        }
+
+        $stderr = $this->currentProcess->getIncrementalErrorOutput();
+        if ($stderr !== '') {
+            $output->write($stderr);
+        }
+
+        $stdout = $this->currentProcess->getIncrementalOutput();
+        if ($stdout !== '') {
+            $output->write($stdout);
+        }
+    }
+
+    private function buildFailureMessage(Process $process): string
+    {
+        $parts = [
+            sprintf('Wrapped command failed with exit code %d.', $process->getExitCode() ?? -1),
+        ];
+
+        $stderr = trim($process->getErrorOutput());
+        $stdout = trim($process->getOutput());
+
+        if ($stderr !== '') {
+            $parts[] = $stderr;
+        } elseif ($stdout !== '') {
+            $parts[] = $stdout;
+        }
+
+        return implode(PHP_EOL, $parts);
     }
 }
