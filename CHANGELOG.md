@@ -21,8 +21,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `ForkedProcessor` fallback now targets explicitly failed pages instead of all non-completed pages.
-- `ForkedProcessor` supports configurable child DB reconnect behavior through constructor argument `reconnectDatabaseInChild` (now opt-in; default `false` for nested mview compatibility).
-- `ForkedProcessor` compatibility mode (default) now terminates child workers with signals to avoid PHP child shutdown closing parent mview temporary-table sessions.
+- `ForkedProcessor` supports configurable child DB reconnect behavior through constructor argument `reconnectDatabaseInChild` (now opt-in; default `false` to preserve DB session compatibility for temporary-table-based workloads).
+- `ForkedProcessor` compatibility mode (default) now terminates child workers with signals to avoid PHP child shutdown closing parent DB session state used by temporary-table-based workloads.
 
 ## [0.2.0] - 2026-01-26
 

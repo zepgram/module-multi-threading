@@ -243,9 +243,10 @@ if you have 10 stores, the maximum number of child processes that can be created
   the parent process will wait the child process to finish before creating another one.
 
 - `reconnectDatabaseInChild` (constructor argument on `ForkedProcessor`): disabled by default.
-  This must stay disabled for nested Magento mview flows relying on session-scoped temporary
-  tables (for example changelog walkers). If your workload needs forced child reconnects, you can
-  enable it explicitly through DI.
+  Keep this disabled when the parent process relies on MySQL connection-scoped temporary table
+  state. This is not specific to mview: it also applies to workloads that depend on temporary
+  tables that are explicit, implicit, or otherwise virtual to the current DB session. If your
+  workload requires fresh child DB connections, you can enable it explicitly through DI.
 
   Example (`etc/di.xml`):
   ```xml
@@ -255,8 +256,8 @@ if you have 10 stores, the maximum number of child processes that can be created
       </arguments>
   </type>
   ```
-  Use `true` for standalone forked workloads where child processes should always open fresh DB connections.
-  Keep `false` for nested mview/indexer flows that depend on session temporary tables.
+  Use `true` for standalone forked workloads where child processes should always open fresh DB
+  connections. Keep `false` when processing logic depends on DB session-scoped temporary state.
 
 - `$isIdempotent`: This parameter is a flag set to `true` by default and can be used for `ForkedSearchResultProcessor` 
   or `ForkedCollectionProcessor` when your `$maxChildrenProcess` is greater than one.

@@ -31,9 +31,6 @@ class ThreadProcessorCommand extends Command
     /** @var bool */
     private bool $isAllowedToRun = true;
 
-    /** @var bool */
-    private bool $pcntlEnabled = false;
-
     protected function configure(): void
     {
         $this->setDescription('Wrapper command to run a command line indefinitely in a dedicated thread');
@@ -165,9 +162,7 @@ class ThreadProcessorCommand extends Command
                 $this->currentProcess->start();
 
                 while ($this->currentProcess->isRunning()) {
-                    if ($this->pcntlEnabled) {
-                        pcntl_signal_dispatch();
-                    }
+                    pcntl_signal_dispatch();
                     $this->flushProcessOutput($output);
                     usleep(100000);
                 }
@@ -230,12 +225,6 @@ class ThreadProcessorCommand extends Command
      */
     private function registerSignalHandlers(): void
     {
-        if (!extension_loaded('pcntl')) {
-            $this->pcntlEnabled = false;
-            return;
-        }
-
-        $this->pcntlEnabled = true;
         pcntl_signal(SIGINT, [$this, 'handleSignal']);
         pcntl_signal(SIGTERM, [$this, 'handleSignal']);
 
